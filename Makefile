@@ -1,5 +1,5 @@
 build:
-	go build -o bin/diamonds cmd/main.go
+	go build -o bin/metamorphosis cmd/main.go
 
 test:
 	go test ./...

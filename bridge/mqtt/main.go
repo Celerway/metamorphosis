@@ -6,6 +6,7 @@ import (
 	"fmt"
 	paho "github.com/eclipse/paho.mqtt.golang"
 	log "github.com/sirupsen/logrus"
+	"sync"
 )
 
 type MqttParams struct {
@@ -16,9 +17,11 @@ type MqttParams struct {
 	LostCallback func()
 	TlsConfig    *tls.Config
 	Ctx          context.Context
+	Channel      MessageChannel
+	WaitGroup    *sync.WaitGroup
 }
 
-type MqttClient struct {
+type mqttClient struct {
 	client       paho.Client
 	tlsConfig    *tls.Config
 	broker       string
@@ -28,6 +31,7 @@ type MqttClient struct {
 	tls          bool
 	ch           MessageChannel
 	ctx          context.Context
+	waitGroup    *sync.WaitGroup
 }
 
 type MqttMessage struct {
@@ -39,7 +43,7 @@ type MessageChannel chan MqttMessage
 
 // handleConnect
 // Connects to the broker. Blocks until the connection is established.
-func (c *MqttClient) handleConnect() {
+func (c *mqttClient) handleConnect() {
 	log.Debug("Worker starting connect to broker.")
 	token := c.client.Connect()
 	if token.Wait() && token.Error() != nil {
@@ -51,14 +55,14 @@ func (c *MqttClient) handleConnect() {
 func Run(p MqttParams) {
 	log.Debugf("Starting MQTT Worker.")
 	log.Debugf("Broker: %s:%d (tls: %v)", p.Broker, p.Port, p.Tls)
-	c := MqttClient{
-		client:       nil,
-		broker:       p.Broker,
-		port:         p.Port,
-		clientId:     "metamorphosis", // Todo: Figure out a proper ID
-		lostCallBack: nil,
-		tls:          p.Tls,
-		ch:           make(MessageChannel), // Todo: Consider buffered channel here.
+	c := mqttClient{
+		broker:    p.Broker,
+		port:      p.Port,
+		clientId:  "metamorphosis", // Todo: Figure out a proper ID
+		tls:       p.Tls,
+		ch:        p.Channel,
+		waitGroup: p.WaitGroup,
+		ctx:       p.Ctx,
 	}
 	opts := paho.NewClientOptions()
 	if p.Tls {
@@ -71,5 +75,21 @@ func Run(p MqttParams) {
 	opts.SetClientID(c.clientId)
 	client := paho.NewClient(opts)
 	c.client = client
+	log.Debug("Spinning off the MQTT worker")
+	c.waitGroup.Add(1)
+	go mainloop(c)
+}
 
+func mainloop(client mqttClient) {
+	log.Debug("In mqtt main loop")
+	keepRunning := true
+	for keepRunning {
+		select {
+		case <-client.ctx.Done():
+			log.Debug("MQTT bridge shutting down.")
+			keepRunning = false
+		}
+	}
+	log.Debug("Finishing")
+	client.waitGroup.Done()
 }

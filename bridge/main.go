@@ -7,6 +7,12 @@ import (
 	"github.com/celerway/metamorphosis/bridge/mqtt"
 	log "github.com/sirupsen/logrus"
 	"io/ioutil"
+	"os"
+	"os/signal"
+	"runtime"
+	"sync"
+	"syscall"
+	"time"
 )
 
 // import "github.com/celerway/metamorphosis/bridge/mqtt"
@@ -49,6 +55,11 @@ func NewTlsConfig(caFile, clientCertFile, clientKeyFile string) *tls.Config {
 }
 
 func Run(params BridgeParams) {
+	var wg sync.WaitGroup
+
+	br := Bridge{
+		MqttCh: make(mqtt.MessageChannel),
+	}
 	tlsConfig := NewTlsConfig(params.TlsRootCrtFile, params.ClientCertFile, params.CLientKeyFile)
 
 	log.WithFields(log.Fields{
@@ -64,8 +75,27 @@ func Run(params BridgeParams) {
 		Broker:    params.MqttBroker,
 		Port:      params.MqttPort,
 		Tls:       params.Tls,
+		Channel:   br.MqttCh,
+		WaitGroup: &wg,
 	}
-
 	mqtt.Run(mqttParams)
+
+	log.Debug("MQTT receiver running")
+
+	sigChan := make(chan os.Signal)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		select {
+		case <-sigChan:
+			cancel()
+			log.Warn("Cancel sent to routers. Waiting for routers to shut down.")
+		case <-time.After(10 * time.Second):
+			log.Info("Shutting down due to end of runtime.")
+			cancel()
+		}
+	}()
+	log.Trace("Main goroutine waiting for bridge shutdown.")
+	wg.Wait()
+	log.Infof("Program exiting. There are currently %d goroutines: ", runtime.NumGoroutine())
 	cancel()
 }

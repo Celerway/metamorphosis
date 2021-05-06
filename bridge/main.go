@@ -17,19 +17,6 @@ import (
 
 // import "github.com/celerway/metamorphosis/bridge/mqtt"
 
-type BridgeParams struct {
-	MqttBroker     string
-	Tls            bool
-	MqttPort       int
-	TlsRootCrtFile string
-	ClientCertFile string
-	CLientKeyFile  string
-}
-
-type Bridge struct {
-	MqttCh mqtt.MessageChannel
-}
-
 func NewTlsConfig(caFile, clientCertFile, clientKeyFile string) *tls.Config {
 	certpool := x509.NewCertPool()
 	ca, err := ioutil.ReadFile(caFile)
@@ -74,6 +61,7 @@ func Run(params BridgeParams) {
 		TlsConfig: tlsConfig,
 		Broker:    params.MqttBroker,
 		Port:      params.MqttPort,
+		Topic:     params.MqttTopic,
 		Tls:       params.Tls,
 		Channel:   br.MqttCh,
 		WaitGroup: &wg,

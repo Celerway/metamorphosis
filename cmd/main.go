@@ -102,6 +102,8 @@ func main() {
 	noTlsPtr := flag.Bool("mqtt-no-tls", false, "Disable TLS")
 	mqttBrokerPtr := flag.String("mqtt-broker", "mqtt.umobu.no", "What TLS broker to use")
 	mqttPortPtr := flag.Int("mqtt-port", 0, "Mqtt port to use.")
+	mqttTopicPtr := flag.String("mqtt-topic", "", "MQTT topic to listen to")
+	flag.Parse()
 	logLevel := setOptionStr(logLevelPtr, "info", "log level", "LOG_LEVEL")
 	setLoglevel(logLevel)
 
@@ -116,10 +118,12 @@ func main() {
 	}
 	mqttBroker := setOptionStr(mqttBrokerPtr, "", "mqtt broker", "MQTT_BROKER")
 	mqttPort := setOptionInt(mqttPortPtr, 8883, "mqtt port", "MQTT_PORT")
+	mqttTopic := setOptionStr(mqttTopicPtr, "", "mqtt topic", "MQTT_TOPIC")
 
 	runConfig := bridge.BridgeParams{
 		MqttBroker:     mqttBroker,
 		MqttPort:       mqttPort,
+		MqttTopic:      mqttTopic,
 		Tls:            Tls,
 		TlsRootCrtFile: caRootCertFile,
 		ClientCertFile: caClientCertFile,

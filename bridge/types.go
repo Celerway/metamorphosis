@@ -1,6 +1,11 @@
 package bridge
 
-import "github.com/celerway/metamorphosis/bridge/mqtt"
+import (
+	"context"
+	"github.com/celerway/metamorphosis/bridge/kafka"
+	"github.com/celerway/metamorphosis/bridge/mqtt"
+	"sync"
+)
 
 type BridgeParams struct {
 	MqttBroker     string
@@ -12,6 +17,9 @@ type BridgeParams struct {
 	MqttTopic      string
 }
 
-type Bridge struct {
-	MqttCh mqtt.MessageChannel
+type bridge struct {
+	mqttCh  mqtt.MessageChannel
+	kafkaCh kafka.MessageChannel
+	ctx     context.Context
+	wg      *sync.WaitGroup
 }

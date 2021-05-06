@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"github.com/celerway/metamorphosis/bridge/kafka"
 	"github.com/celerway/metamorphosis/bridge/mqtt"
 	log "github.com/sirupsen/logrus"
 	"io/ioutil"
@@ -12,7 +13,6 @@ import (
 	"runtime"
 	"sync"
 	"syscall"
-	"time"
 )
 
 // import "github.com/celerway/metamorphosis/bridge/mqtt"
@@ -44,17 +44,16 @@ func NewTlsConfig(caFile, clientCertFile, clientKeyFile string) *tls.Config {
 func Run(params BridgeParams) {
 	var wg sync.WaitGroup
 
-	br := Bridge{
-		MqttCh: make(mqtt.MessageChannel),
-	}
 	tlsConfig := NewTlsConfig(params.TlsRootCrtFile, params.ClientCertFile, params.CLientKeyFile)
-
-	log.WithFields(log.Fields{
-		"module": "bridge",
-	})
-
 	rootCtx := context.Background()
 	ctx, cancel := context.WithCancel(rootCtx)
+
+	br := bridge{
+		mqttCh:  make(mqtt.MessageChannel),
+		kafkaCh: make(kafka.MessageChannel),
+		ctx:     ctx,
+		wg:      &wg,
+	}
 
 	mqttParams := mqtt.MqttParams{
 		Ctx:       ctx,
@@ -63,25 +62,24 @@ func Run(params BridgeParams) {
 		Port:      params.MqttPort,
 		Topic:     params.MqttTopic,
 		Tls:       params.Tls,
-		Channel:   br.MqttCh,
+		Channel:   br.mqttCh,
 		WaitGroup: &wg,
 	}
 	mqtt.Run(mqttParams)
+	br.run()
 
 	log.Debug("MQTT receiver running")
 
 	sigChan := make(chan os.Signal)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		select {
-		case <-sigChan:
-			cancel()
-			log.Warn("Cancel sent to routers. Waiting for routers to shut down.")
-		case <-time.After(10 * time.Second):
-			log.Info("Shutting down due to end of runtime.")
-			cancel()
-		}
-	}()
+	// Some ppl put this code inside a inline function. I don't think I need to do that here, since we're
+	// just waiting.
+	select {
+	case <-sigChan:
+		cancel()
+		log.Warn("Cancel sent to workers. Waiting for workers to exit cleanly")
+	}
+
 	log.Trace("Main goroutine waiting for bridge shutdown.")
 	wg.Wait()
 	log.Infof("Program exiting. There are currently %d goroutines: ", runtime.NumGoroutine())

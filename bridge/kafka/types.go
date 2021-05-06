@@ -1,14 +1,20 @@
-package mqtt
+package kafka
 
 import (
 	"context"
 	"crypto/tls"
-	paho "github.com/eclipse/paho.mqtt.golang"
 	"sync"
 )
 
-type MqttParams struct {
-	Broker    string
+type KafkaChannelMessage struct {
+	Topic   string
+	Content []byte
+}
+
+type MessageChannel chan KafkaChannelMessage
+
+type KafkaParams struct {
+	Server    string
 	Port      int
 	Clientid  string
 	Tls       bool
@@ -19,17 +25,9 @@ type MqttParams struct {
 	Topic     string
 }
 
-type MqttChannelMessage struct {
-	Topic   string
-	Content []byte
-}
-
-type MessageChannel chan MqttChannelMessage
-
-type mqttClient struct {
-	client    paho.Client
+type kafkaClient struct {
 	tlsConfig *tls.Config
-	broker    string
+	server    string
 	port      int
 	clientId  string
 	tls       bool

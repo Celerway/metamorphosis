@@ -1,10 +1,11 @@
 package kafka
 
-import log "github.com/sirupsen/logrus"
+import (
+	"time"
+)
 
-func Run() {
-	log.WithFields(log.Fields{
-		"module": "bridge/kafka",
-	})
-
+func Run(params KafkaParams) {
+	params.WaitGroup.Add(1)
+	time.Sleep(5 * time.Second)
+	params.WaitGroup.Done()
 }

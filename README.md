@@ -8,10 +8,6 @@ generic. This is mainly due to two reason:
 
 * The types. We'll use native Go types for the schema and not having to have any Yaml defining the schema simplifies the
   code a lot.
-* Transformations. There are no easy ways to plug arbitrary Go code for doing transformations.
-
-Both of these could be addressed using Go plugins, which would allow us to load user-supplied code to do these
-operations.
 
 This is a protocol bridge between MQTT and Kafka. It'll connect to a broker, issue a number of subscriptions and listen
 for messages. One a message is received we'll transform it a bit and give it to kafka.
@@ -19,6 +15,18 @@ for messages. One a message is received we'll transform it a bit and give it to 
 If Kafka is unavailable we'll try to spool the messages to local storage, so they can be recovered. Not sure about the
 details here, but I suspect we can dump streams of JSON in some format that can be easily ingested
 into Kafka / Red Panda.
+
+## Message format
+
+Each message that is written to Kafka will look like this:
+```
+type MqttChannelMessage struct {
+  Topic   string
+  Content []byte
+}
+```
+So, then reading from Kafka we'll need to look at the topic and call the relevant handler for that
+type of message.
 
 ## Design
 
@@ -29,12 +37,12 @@ Both Kafka and MQTT will communicate to the bridge with a channel.
 
 ## Validation of messages
 
-Both MQTT and Kafka will validate the messages they send and recieve. Depending on configuration the bridge will either
+Both MQTT and Kafka will validate the messages they send and receive. Depending on configuration the bridge will either
 reject the message or warn of the message doesn't pass validation.
 
 ## Transforming data
 
-As a message is transfered to the bridge the bridge will transform the message.
+As a message is transferred to the bridge, and the bridge will transmit the message.
 
 In our specific case we'll take some data from the topic of the MQTT message and inject this into the message that is
 issued on the kafka topic.

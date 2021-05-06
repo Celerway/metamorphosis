@@ -85,4 +85,9 @@ func (client mqttClient) subscribe() {
 
 func (client mqttClient) messageHandler(pahoClient paho.Client, msg paho.Message) {
 	log.Debugf("Got message on topic %s. Message: %s", msg.Topic(), string(msg.Payload()))
+	chMsg := MqttChannelMessage{
+		Topic:   msg.Topic(),
+		Content: msg.Payload(),
+	}
+	client.ch <- chMsg
 }

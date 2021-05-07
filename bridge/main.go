@@ -44,19 +44,17 @@ func NewTlsConfig(caFile, clientCertFile, clientKeyFile string) *tls.Config {
 func Run(params BridgeParams) {
 	var wg sync.WaitGroup
 
-	tlsConfig := NewTlsConfig(params.TlsRootCrtFile, params.ClientCertFile, params.CLientKeyFile)
+	tlsConfig := NewTlsConfig(params.TlsRootCrtFile, params.ClientCertFile, params.ClientKeyFile)
 	rootCtx := context.Background()
 	ctx, cancel := context.WithCancel(rootCtx)
 
 	br := bridge{
-		mqttCh:  make(mqtt.MessageChannel),
-		kafkaCh: make(kafka.MessageChannel),
-		ctx:     ctx,
-		wg:      &wg,
+		mqttCh:    make(mqtt.MessageChannel),
+		kafkaCh:   make(kafka.MessageChannel),
+		waitGroup: &wg,
 	}
 
 	mqttParams := mqtt.MqttParams{
-		Ctx:       ctx,
 		TlsConfig: tlsConfig,
 		Broker:    params.MqttBroker,
 		Port:      params.MqttPort,
@@ -65,21 +63,36 @@ func Run(params BridgeParams) {
 		Channel:   br.mqttCh,
 		WaitGroup: &wg,
 	}
-	mqtt.Run(mqttParams)
-	br.run()
+	kafkaParams := kafka.KafkaParams{
+		Broker:    params.KafkaBroker,
+		Port:      params.KafkaPort,
+		Channel:   br.kafkaCh,
+		WaitGroup: &wg,
+		Topic:     params.KafkaTopic,
+	}
+	// Start the goroutines that do the work.
+	mqtt.Run(ctx, mqttParams)
+	kafka.Run(ctx, kafkaParams)
+	br.run(ctx)
 
 	log.Debug("MQTT receiver running")
 
 	sigChan := make(chan os.Signal)
-	signal.Notify(sigChan, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
-	// Some ppl put this code inside a inline function. I don't think I need to do that here, since we're
-	// just waiting.
-	select {
-	case <-sigChan:
-		cancel()
-		log.Warn("Cancel sent to workers. Waiting for workers to exit cleanly")
-	}
-
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	// Spin off a goroutine that will wait for SIGNALs and cancel the context.
+	// If we wanna do something on a regular basis (log stats or whatnot)
+	// this is a good place.
+	go func() {
+		wg.Add(1)
+		log.Debug("Signal listening goroutine is running.")
+		select {
+		case <-sigChan:
+			cancel()
+			log.Warn("Cancel sent to workers. Waiting for workers to exit cleanly")
+			wg.Done()
+			return
+		}
+	}()
 	log.Trace("Main goroutine waiting for bridge shutdown.")
 	wg.Wait()
 	log.Infof("Program exiting. There are currently %d goroutines: ", runtime.NumGoroutine())

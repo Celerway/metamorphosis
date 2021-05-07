@@ -13,13 +13,16 @@ type BridgeParams struct {
 	MqttPort       int
 	TlsRootCrtFile string
 	ClientCertFile string
-	CLientKeyFile  string
+	ClientKeyFile  string
 	MqttTopic      string
+	KafkaBroker    string
+	KafkaPort      int
+	KafkaTopic     string
 }
 
 type bridge struct {
-	mqttCh  mqtt.MessageChannel
-	kafkaCh kafka.MessageChannel
-	ctx     context.Context
-	wg      *sync.WaitGroup
+	mqttCh    mqtt.MessageChannel
+	kafkaCh   kafka.MessageChannel
+	ctx       context.Context
+	waitGroup *sync.WaitGroup
 }

@@ -1,7 +1,6 @@
 package mqtt
 
 import (
-	"context"
 	"crypto/tls"
 	paho "github.com/eclipse/paho.mqtt.golang"
 	"sync"
@@ -13,7 +12,6 @@ type MqttParams struct {
 	Clientid  string
 	Tls       bool
 	TlsConfig *tls.Config
-	Ctx       context.Context
 	Channel   MessageChannel
 	WaitGroup *sync.WaitGroup
 	Topic     string
@@ -34,7 +32,6 @@ type mqttClient struct {
 	clientId  string
 	tls       bool
 	ch        MessageChannel
-	ctx       context.Context
 	waitGroup *sync.WaitGroup
 	topic     string
 }

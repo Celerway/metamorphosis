@@ -44,7 +44,7 @@ func setOptionStr(paramPtr *string, defaultValue, name, env string) string {
 	if ret == "" {
 		log.Errorf("Mandatory option %s not given in ENV{%s} or by flag", name, env)
 	}
-	log.Debugf("Option '%s' set to '%s'", name, ret)
+	log.Tracef("Option '%s' set to '%s'", name, ret)
 	return ret
 }
 func setOptionInt(paramPtr *int, defaultValue int, name, env string) int {
@@ -67,7 +67,7 @@ func setOptionInt(paramPtr *int, defaultValue int, name, env string) int {
 	if ret == 0 {
 		log.Fatalf("Mandatory option %s not given in ENV{%s} or by flag", name, env)
 	}
-	log.Debugf("Option '%s' set to %d", name, ret)
+	log.Tracef("Option '%s' set to %d", name, ret)
 	return ret
 }
 func setOptionBool(paramPtr *bool, defaultValue bool, name, env string) bool {
@@ -84,7 +84,7 @@ func setOptionBool(paramPtr *bool, defaultValue bool, name, env string) bool {
 	if ret == false {
 		ret = defaultValue
 	}
-	log.Debugf("Option '%s' is set to '%v'", name, ret)
+	log.Tracef("Option '%s' is set to '%v'", name, ret)
 	return ret
 }
 
@@ -99,10 +99,14 @@ func main() {
 	caRootCertFilePtr := flag.String("ca", "", "Path to root CA certificate (pubkey)")
 	caClientCertFilePtr := flag.String("client-cert", "", "Path to client cert (pubkey)")
 	caClientKeyFilePtr := flag.String("client-key", "", "Path to client key (privkey)")
-	noTlsPtr := flag.Bool("mqtt-no-tls", false, "Disable TLS")
-	mqttBrokerPtr := flag.String("mqtt-broker", "mqtt.umobu.no", "What TLS broker to use")
-	mqttPortPtr := flag.Int("mqtt-port", 0, "Mqtt port to use.")
+	noTlsPtr := flag.Bool("mqtt-no-tls", false, "Disable TLS for MQTT")
+	mqttBrokerPtr := flag.String("mqtt-broker", "", "MQTT broker hostname")
+	mqttPortPtr := flag.Int("mqtt-port", 0, "Mqtt broker port.")
 	mqttTopicPtr := flag.String("mqtt-topic", "", "MQTT topic to listen to")
+	kafkaBrokerPtr := flag.String("kafka-broker", "", "Kafka broker hostname")
+	kafkaPortPtr := flag.Int("kakfa-port", 0, "Kafka broker port")
+	kafkaTopicPtr := flag.String("kafka-topic", "", "Kafka topic to write to")
+
 	flag.Parse()
 	logLevel := setOptionStr(logLevelPtr, "info", "log level", "LOG_LEVEL")
 	setLoglevel(logLevel)
@@ -120,6 +124,10 @@ func main() {
 	mqttPort := setOptionInt(mqttPortPtr, 8883, "mqtt port", "MQTT_PORT")
 	mqttTopic := setOptionStr(mqttTopicPtr, "", "mqtt topic", "MQTT_TOPIC")
 
+	kafkaBroker := setOptionStr(kafkaBrokerPtr, "", "kafka broker", "KAFKA_BROKER")
+	kafkaPort := setOptionInt(kafkaPortPtr, 9092, "kafka port", "KAFKA_PORT")
+	kafkaTopic := setOptionStr(kafkaTopicPtr, "", "kafka topic", "KAFKA_TOPIC")
+
 	runConfig := bridge.BridgeParams{
 		MqttBroker:     mqttBroker,
 		MqttPort:       mqttPort,
@@ -127,7 +135,10 @@ func main() {
 		Tls:            Tls,
 		TlsRootCrtFile: caRootCertFile,
 		ClientCertFile: caClientCertFile,
-		CLientKeyFile:  caClientKeyFile,
+		ClientKeyFile:  caClientKeyFile,
+		KafkaBroker:    kafkaBroker,
+		KafkaPort:      kafkaPort,
+		KafkaTopic:     kafkaTopic,
 	}
 	log.Debug("Starting bridge")
 	bridge.Run(runConfig)

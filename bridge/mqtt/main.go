@@ -1,12 +1,13 @@
 package mqtt
 
 import (
+	"context"
 	"fmt"
 	paho "github.com/eclipse/paho.mqtt.golang"
 	log "github.com/sirupsen/logrus"
 )
 
-func Run(p MqttParams) {
+func Run(ctx context.Context, p MqttParams) {
 	log.Debugf("Starting MQTT Worker.")
 	log.Debugf("Broker: %s:%d (tls: %v)", p.Broker, p.Port, p.Tls)
 	c := mqttClient{
@@ -17,7 +18,6 @@ func Run(p MqttParams) {
 		tls:       p.Tls,
 		ch:        p.Channel,
 		waitGroup: p.WaitGroup,
-		ctx:       p.Ctx,
 	}
 	opts := paho.NewClientOptions()
 	if p.Tls {
@@ -32,27 +32,29 @@ func Run(p MqttParams) {
 	client := paho.NewClient(opts)
 	c.client = client
 	log.Debug("Spinning off the MQTT worker")
-	c.waitGroup.Add(1)
-	go c.mainloop()
+	go c.mainloop(ctx)
 }
 
 // mainloop
 // This is a goroutine. When you return it dies.
 // Connects to the MQTT broker, subscribes and processes messages.
-func (client mqttClient) mainloop() {
+// All the works happens in the event handler.
+// Todo: Should we perhaps try to make sure we're in a consistent state before we shut down?
+func (client mqttClient) mainloop(ctx context.Context) {
 	log.Debug("In mqtt main loop")
+	client.waitGroup.Add(1)
 
 	client.handleConnect()
-	client.subscribe()
+	client.subscribe() // Also sets up handlers.
 
-	keepRunning := true
-	for keepRunning {
-		select {
-		case <-client.ctx.Done():
-			log.Debug("MQTT bridge shutting down.")
-			keepRunning = false
-		}
+	// Here we start blocking the goroutine and wait for shutdown.
+	// If we need to keep track of something we can wrap this in a loop
+	// Just be sure not to introduce any races.
+	select {
+	case <-ctx.Done():
+		log.Debug("MQTT bridge shutting down.")
 	}
+
 	client.waitGroup.Done()
 	log.Info("MQTT bridge exiting")
 }
@@ -67,12 +69,12 @@ func (c *mqttClient) handleConnect() {
 		// Todo: wtf do we do here?
 		// Do we retry? Fail fatally and assume that k8s will restart the container?
 	}
-	log.Infof("Worker '%v' connected", c.clientId)
+	log.Infof("Worker '%v' connected to MQTT %s:%d", c.clientId, c.broker, c.port)
 }
 
 func (c *mqttClient) handleDisconnect(pahoClient paho.Client, err error) {
 	log.Errorf("handleDisconnect invoked with error: %s", err)
-	log.Info("Reconnecting")
+	log.Info("Reconnecting to broker.")
 	c.handleConnect()
 
 }

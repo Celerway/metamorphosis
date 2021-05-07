@@ -1,8 +1,7 @@
 package kafka
 
 import (
-	"context"
-	"crypto/tls"
+	gokafka "github.com/segmentio/kafka-go"
 	"sync"
 )
 
@@ -14,25 +13,18 @@ type KafkaChannelMessage struct {
 type MessageChannel chan KafkaChannelMessage
 
 type KafkaParams struct {
-	Server    string
+	Broker    string
 	Port      int
-	Clientid  string
-	Tls       bool
-	TlsConfig *tls.Config
-	Ctx       context.Context
 	Channel   MessageChannel
 	WaitGroup *sync.WaitGroup
 	Topic     string
 }
 
 type kafkaClient struct {
-	tlsConfig *tls.Config
-	server    string
+	broker    string
 	port      int
-	clientId  string
-	tls       bool
 	ch        MessageChannel
-	ctx       context.Context
 	waitGroup *sync.WaitGroup
 	topic     string
+	writer    *gokafka.Writer
 }

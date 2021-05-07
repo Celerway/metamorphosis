@@ -2,6 +2,7 @@ package kafka
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	gokafka "github.com/segmentio/kafka-go"
 	log "github.com/sirupsen/logrus"
@@ -30,6 +31,22 @@ func getWriter() *gokafka.Writer {
 	return w
 }
 
+func (client kafkaClient) handleMessageWrite(ctx context.Context, msg KafkaChannelMessage) {
+	log.Debug("Issuing write to kafka")
+	msgJson, err := json.Marshal(msg) // Todo: handle error.
+	if err != nil {
+		log.Fatalf("Could not marshal message %v: %s", msg, err)
+	}
+	log.Tracef("Kafka(%s): %s", client.topic, string(msgJson))
+	kMsg := gokafka.Message{
+		Value: msgJson}
+	err = client.writer.WriteMessages(ctx, kMsg)
+	if err != nil {
+		log.Fatalf("Kafka: Error while writing: %s", err)
+	}
+	log.Trace("Message written.")
+}
+
 func Run(ctx context.Context, params KafkaParams) {
 
 	client := kafkaClient{
@@ -40,6 +57,7 @@ func Run(ctx context.Context, params KafkaParams) {
 		topic:     params.Topic,
 		writer:    getWriter(),
 	}
+
 	go client.mainloop(ctx)
 	log.Debugf("Kafka writer setup against %s:%d", client.broker, client.port)
 
@@ -47,11 +65,16 @@ func Run(ctx context.Context, params KafkaParams) {
 
 func (client kafkaClient) mainloop(ctx context.Context) {
 	client.waitGroup.Add(1)
+	keepRunning := true
 
-	select {
-	case <-ctx.Done():
-		log.Info("Kafka writer shutting down")
-		break
+	for keepRunning {
+		select {
+		case <-ctx.Done():
+			log.Info("Kafka writer shutting down")
+			keepRunning = false
+		case msg := <-client.ch:
+			client.handleMessageWrite(ctx, msg)
+		}
 	}
 	client.waitGroup.Done()
 }

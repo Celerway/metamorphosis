@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/celerway/metamorphosis/bridge/observability"
 	gokafka "github.com/segmentio/kafka-go"
 	log "github.com/sirupsen/logrus"
 	"os"
@@ -42,7 +43,10 @@ func (client kafkaClient) handleMessageWrite(ctx context.Context, msg KafkaChann
 		Value: msgJson}
 	err = client.writer.WriteMessages(ctx, kMsg)
 	if err != nil {
-		log.Fatalf("Kafka: Error while writing: %s", err)
+		client.obsChannel <- observability.KafkaError
+		log.Fatalf("Kafka: Error while writing: %s", err) // Todo: Improve error handling. Do something smart.
+	} else {
+		client.obsChannel <- observability.KafkaSent
 	}
 	log.Trace("Message written.")
 }
@@ -50,12 +54,13 @@ func (client kafkaClient) handleMessageWrite(ctx context.Context, msg KafkaChann
 func Run(ctx context.Context, params KafkaParams) {
 
 	client := kafkaClient{
-		broker:    params.Broker,
-		port:      params.Port,
-		ch:        params.Channel,
-		waitGroup: params.WaitGroup,
-		topic:     params.Topic,
-		writer:    getWriter(),
+		broker:     params.Broker,
+		port:       params.Port,
+		ch:         params.Channel,
+		waitGroup:  params.WaitGroup,
+		topic:      params.Topic,
+		writer:     getWriter(),
+		obsChannel: params.ObsChannel,
 	}
 
 	go client.mainloop(ctx)

@@ -3,6 +3,7 @@ package mqtt
 import (
 	"context"
 	"fmt"
+	"github.com/celerway/metamorphosis/bridge/observability"
 	paho "github.com/eclipse/paho.mqtt.golang"
 	log "github.com/sirupsen/logrus"
 )
@@ -11,13 +12,14 @@ func Run(ctx context.Context, p MqttParams) {
 	log.Debugf("Starting MQTT Worker.")
 	log.Debugf("Broker: %s:%d (tls: %v)", p.Broker, p.Port, p.Tls)
 	c := mqttClient{
-		broker:    p.Broker,
-		port:      p.Port,
-		topic:     p.Topic,
-		clientId:  "metamorphosis", // Todo: Figure out a proper ID
-		tls:       p.Tls,
-		ch:        p.Channel,
-		waitGroup: p.WaitGroup,
+		broker:     p.Broker,
+		port:       p.Port,
+		topic:      p.Topic,
+		clientId:   "metamorphosis", // Todo: Figure out a proper ID
+		tls:        p.Tls,
+		ch:         p.Channel,
+		waitGroup:  p.WaitGroup,
+		obsChannel: p.ObsChannel,
 	}
 	opts := paho.NewClientOptions()
 	if p.Tls {
@@ -61,21 +63,21 @@ func (client mqttClient) mainloop(ctx context.Context) {
 
 // handleConnect
 // Connects to the broker. Blocks until the connection is established.
-func (c *mqttClient) handleConnect() {
+func (client *mqttClient) handleConnect() {
 	log.Debug("Worker starting connect to broker.")
-	token := c.client.Connect()
+	token := client.client.Connect()
 	if token.Wait() && token.Error() != nil {
 		log.Fatalf("Could not connect to broker: %s", token.Error())
 		// Todo: wtf do we do here?
 		// Do we retry? Fail fatally and assume that k8s will restart the container?
 	}
-	log.Infof("Worker '%v' connected to MQTT %s:%d", c.clientId, c.broker, c.port)
+	log.Infof("Worker '%v' connected to MQTT %s:%d", client.clientId, client.broker, client.port)
 }
 
-func (c *mqttClient) handleDisconnect(pahoClient paho.Client, err error) {
+func (client *mqttClient) handleDisconnect(pahoClient paho.Client, err error) {
 	log.Errorf("handleDisconnect invoked with error: %s", err)
 	log.Info("Reconnecting to broker.")
-	c.handleConnect()
+	client.handleConnect()
 
 }
 
@@ -92,4 +94,5 @@ func (client mqttClient) messageHandler(pahoClient paho.Client, msg paho.Message
 		Content: msg.Payload(),
 	}
 	client.ch <- chMsg
+	client.obsChannel <- observability.MqttRecieved
 }

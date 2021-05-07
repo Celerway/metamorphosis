@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"github.com/celerway/metamorphosis/bridge/kafka"
 	"github.com/celerway/metamorphosis/bridge/mqtt"
+	"github.com/celerway/metamorphosis/bridge/observability"
 	log "github.com/sirupsen/logrus"
 	"io/ioutil"
 	"os"
@@ -48,6 +49,8 @@ func Run(params BridgeParams) {
 	rootCtx := context.Background()
 	ctx, cancel := context.WithCancel(rootCtx)
 
+	obsChan := observability.GetChannel()
+
 	br := bridge{
 		mqttCh:    make(mqtt.MessageChannel),
 		kafkaCh:   make(kafka.MessageChannel),
@@ -55,25 +58,32 @@ func Run(params BridgeParams) {
 	}
 
 	mqttParams := mqtt.MqttParams{
-		TlsConfig: tlsConfig,
-		Broker:    params.MqttBroker,
-		Port:      params.MqttPort,
-		Topic:     params.MqttTopic,
-		Tls:       params.Tls,
-		Channel:   br.mqttCh,
-		WaitGroup: &wg,
+		TlsConfig:  tlsConfig,
+		Broker:     params.MqttBroker,
+		Port:       params.MqttPort,
+		Topic:      params.MqttTopic,
+		Tls:        params.Tls,
+		Channel:    br.mqttCh,
+		WaitGroup:  &wg,
+		ObsChannel: obsChan,
 	}
 	kafkaParams := kafka.KafkaParams{
-		Broker:    params.KafkaBroker,
-		Port:      params.KafkaPort,
-		Channel:   br.kafkaCh,
-		WaitGroup: &wg,
-		Topic:     params.KafkaTopic,
+		Broker:     params.KafkaBroker,
+		Port:       params.KafkaPort,
+		Channel:    br.kafkaCh,
+		WaitGroup:  &wg,
+		Topic:      params.KafkaTopic,
+		ObsChannel: obsChan,
+	}
+	obsParams := observability.ObservabilityParams{
+		Channel:   obsChan,
+		Waitgroup: &wg,
 	}
 	// Start the goroutines that do the work.
 	mqtt.Run(ctx, mqttParams)
 	kafka.Run(ctx, kafkaParams)
 	br.run(ctx)
+	observability.Run(ctx, obsParams)
 
 	log.Debug("MQTT receiver running")
 

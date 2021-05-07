@@ -21,9 +21,9 @@ of topics is enabled.
 
 Each message that is written to Kafka will look like this:
 ```
-type MqttChannelMessage struct {
-  Topic   string
-  Content []byte
+type Message struct {
+  Topic   string   // The topic of the originating MQTT message.
+  Content []byte   // base64 encoded as we don't know anything about what it contains.
 }
 ```
 So, then reading from Kafka we'll need to look at the topic and call the relevant handler for that

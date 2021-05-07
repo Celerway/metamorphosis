@@ -22,16 +22,18 @@ func (br bridge) mainloop(ctx context.Context) {
 		case chMsg := <-br.mqttCh:
 			br.glueMsgHandler(chMsg)
 		case <-ctx.Done():
-			log.Debug("Glue shutting down.")
+			log.Info("MQTT/Kafka bridge shutting down.")
 			keepRunning = false
 			break
 		}
 	}
+	log.Info("MQTT/Kafka bridge done.")
+
 	br.waitGroup.Done()
 }
 
 func (br bridge) glueMsgHandler(msg mqtt.MqttChannelMessage) {
-	kafkaMsg := kafka.KafkaChannelMessage{
+	kafkaMsg := kafka.KafkaMessage{
 		Topic:   msg.Topic,
 		Content: msg.Content,
 	}

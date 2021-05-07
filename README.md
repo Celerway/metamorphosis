@@ -32,13 +32,21 @@ content of the message is base64 encoded.
 
 ## Design
 
-Four goroutines should be running at any point in time:
+Three main packages
+ * bridge glues together mqtt and kafka. If we ever want to do transformations, it happens here.
+ * mqtt contains the mqtt stuff
+ * kafka for the kafka stuff
+
+In addition, there is an observability package which deals with prometheus stuff.
+
+Six goroutines should be running at any point in time:
  * one is listening to MQTT
  * one is talking to Kafka
  * one is moving messages between these two. We could have sent the messages directly, but the overhead is
    small, and we want to have the opportunity to transform messages. So this layering makes sense.
  * one is serving HTTP, so we have some observability and health.
-
+ * one is listening for observability events on the observability channel and updates the prom counters
+ * one silly little one is just listening for SIGTERM and SIGINT
 
 ### Todo: testing
 

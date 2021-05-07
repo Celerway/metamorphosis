@@ -1,7 +1,6 @@
 package observability
 
 import (
-	"context"
 	"fmt"
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus"
@@ -11,27 +10,20 @@ import (
 	"net/http"
 )
 
-func (obs observability) mainloop(ctx context.Context) {
-	obs.waitGroup.Add(1)
-	keepRunning := true
+func (obs observability) mainloop() {
 	log.Debug("Observability worker is running")
-	for keepRunning {
+	for true {
 		select {
-		case <-ctx.Done():
-			log.Info("obs: context cancelled")
-			keepRunning = false
 		case msg := <-obs.channel:
 			obs.handleChannelMessage(msg)
 		}
 
 	}
-	obs.waitGroup.Done()
 }
 
-func Run(ctx context.Context, params ObservabilityParams) {
+func Run(params ObservabilityParams) {
 	obs := observability{
-		waitGroup: params.Waitgroup,
-		channel:   params.Channel,
+		channel: params.Channel,
 	}
 
 	obs.mqttReceived = promauto.NewCounter(prometheus.CounterOpts{
@@ -50,7 +42,7 @@ func Run(ctx context.Context, params ObservabilityParams) {
 		Name: "kafka_errors",
 		Help: "No of errors encountered with Kafka",
 	})
-	go obs.mainloop(ctx)
+	go obs.mainloop()
 	go obs.httpStuff()
 }
 
@@ -85,7 +77,7 @@ func GetChannel() ObservabilityChannel {
 	return make(ObservabilityChannel, 0)
 }
 
-func SillyHealthzHandler(w http.ResponseWriter, r *http.Request) {
+func SillyHealthzHandler(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(200)
-	w.Write([]byte("ok"))
+	_, _ = w.Write([]byte("ok"))
 }

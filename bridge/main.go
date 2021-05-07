@@ -48,19 +48,17 @@ func Run(params BridgeParams) {
 
 	tlsConfig := NewTlsConfig(params.TlsRootCrtFile, params.ClientCertFile, params.ClientKeyFile)
 
-	// In order to avoid hanging when we shut down we shutdown things in a certain order. So we use multiple contexts
+	// In order to avoid hanging when we shut down we shutdown things in a certain order. So we use two contexts
 	// to do this.
 	rootCtx := context.Background()
 	mqttCtx, mqttCancel := context.WithCancel(rootCtx)   // Mqtt client. Shutdown first.
 	kafkaCtx, kafkaCancel := context.WithCancel(rootCtx) // Kafka, shutdown after mqtt.
-	mainCtx, mainCancel := context.WithCancel(rootCtx)   // Bridge and obs. Shutdown last.
 
 	obsChan := observability.GetChannel()
 
 	br := bridge{
-		mqttCh:    make(mqtt.MessageChannel, 0),
-		kafkaCh:   make(kafka.MessageChannel, 0),
-		waitGroup: &wg,
+		mqttCh:  make(mqtt.MessageChannel, 0),
+		kafkaCh: make(kafka.MessageChannel, 0),
 	}
 
 	mqttParams := mqtt.MqttParams{
@@ -82,14 +80,13 @@ func Run(params BridgeParams) {
 		ObsChannel: obsChan,
 	}
 	obsParams := observability.ObservabilityParams{
-		Channel:   obsChan,
-		Waitgroup: &wg,
+		Channel: obsChan,
 	}
 	// Start the goroutines that do the work.
 	mqtt.Run(mqttCtx, mqttParams)
 	kafka.Run(kafkaCtx, kafkaParams)
-	br.run(mainCtx)
-	observability.Run(mainCtx, obsParams)
+	br.run()
+	observability.Run(obsParams)
 
 	log.Debug("MQTT receiver running")
 
@@ -105,10 +102,8 @@ func Run(params BridgeParams) {
 		case <-sigChan:
 			log.Warn("Cancelled context. Initiating shutdown.")
 			mqttCancel()
-			time.Sleep(1 * time.Second)
+			time.Sleep(2 * time.Second)
 			kafkaCancel()
-			time.Sleep(1 * time.Second)
-			mainCancel()
 			wg.Done()
 			return
 		}
@@ -116,5 +111,4 @@ func Run(params BridgeParams) {
 	log.Trace("Main goroutine waiting for bridge shutdown.")
 	wg.Wait()
 	log.Infof("Program exiting. There are currently %d goroutines: ", runtime.NumGoroutine())
-	mainCancel()
 }

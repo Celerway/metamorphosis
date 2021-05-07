@@ -2,7 +2,6 @@ package observability
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
-	"sync"
 )
 
 type ObservabilityChannel chan StatusMessage
@@ -21,12 +20,10 @@ func (d StatusMessage) String() string {
 }
 
 type ObservabilityParams struct {
-	Channel   ObservabilityChannel
-	Waitgroup *sync.WaitGroup
+	Channel ObservabilityChannel
 }
 
 type observability struct {
-	waitGroup    *sync.WaitGroup
 	channel      ObservabilityChannel
 	mqttReceived prometheus.Counter
 	mqttErrors   prometheus.Counter

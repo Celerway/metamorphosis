@@ -32,7 +32,7 @@ func Run(ctx context.Context, p MqttParams) {
 	opts.SetClientID(c.clientId)
 	opts.SetConnectionLostHandler(c.handleDisconnect)
 	client := paho.NewClient(opts)
-	c.client = client
+	c.paho = client
 	log.Debug("Spinning off the MQTT worker")
 	go c.mainloop(ctx)
 }
@@ -41,7 +41,6 @@ func Run(ctx context.Context, p MqttParams) {
 // This is a goroutine. When you return it dies.
 // Connects to the MQTT broker, subscribes and processes messages.
 // All the works happens in the event handler.
-// Todo: Should we perhaps try to make sure we're in a consistent state before we shut down?
 func (client mqttClient) mainloop(ctx context.Context) {
 	log.Debug("In mqtt main loop")
 	client.waitGroup.Add(1)
@@ -54,18 +53,23 @@ func (client mqttClient) mainloop(ctx context.Context) {
 	// Just be sure not to introduce any races.
 	select {
 	case <-ctx.Done():
-		log.Debug("MQTT bridge shutting down.")
+		log.Debug("MQTT client shutting down.")
+		// Todo: There seems to be a race condition in the Paho Mqtt library that
+		// we trigger here from time to time.
+		client.unsubscribe()
+		client.paho.Disconnect(100)
+		log.Debug("MQTT disconnected")
 	}
 
 	client.waitGroup.Done()
-	log.Info("MQTT bridge exiting")
+	log.Info("MQTT client exiting")
 }
 
 // handleConnect
 // Connects to the broker. Blocks until the connection is established.
 func (client *mqttClient) handleConnect() {
-	log.Debug("Worker starting connect to broker.")
-	token := client.client.Connect()
+	log.Debug("MQTT client starting connect to broker.")
+	token := client.paho.Connect()
 	if token.Wait() && token.Error() != nil {
 		log.Fatalf("Could not connect to broker: %s", token.Error())
 		// Todo: wtf do we do here?
@@ -81,8 +85,13 @@ func (client *mqttClient) handleDisconnect(pahoClient paho.Client, err error) {
 
 }
 
+func (client mqttClient) unsubscribe() {
+	token := client.paho.Unsubscribe(client.topic)
+	token.Wait()
+	log.Infof("Unsubscribed from topic '%s'", client.topic)
+}
 func (client mqttClient) subscribe() {
-	token := client.client.Subscribe(client.topic, 1, client.messageHandler)
+	token := client.paho.Subscribe(client.topic, 1, client.messageHandler)
 	token.Wait()
 	log.Infof("Subscribed to topic '%s'", client.topic)
 }

@@ -9,6 +9,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"os"
 	"strconv"
+	"time"
 )
 
 func getInt(s string) int {
@@ -18,68 +19,137 @@ func getInt(s string) int {
 	}
 	return val
 }
-func getWriter() *gokafka.Writer {
 
+// This creates a write struct. Used when initializing.
+func getWriter() *gokafka.Writer {
 	broker := fmt.Sprintf("%s:%d",
 		os.Getenv("KAFKA_BROKER"), getInt(os.Getenv("KAFKA_PORT")))
-
 	w := &gokafka.Writer{
 		Addr:     gokafka.TCP(broker),
 		Topic:    os.Getenv("KAFKA_TOPIC"),
 		Balancer: &gokafka.LeastBytes{},
 	}
-
 	return w
 }
 
-func (client kafkaClient) handleMessageWrite(ctx context.Context, msg KafkaChannelMessage) {
+// The handler that gets called when we get a message.
+func handleMessageWrite(ctx context.Context, msg KafkaMessage, client kafkaClient) bool {
 	log.Debug("Issuing write to kafka")
-	msgJson, err := json.Marshal(msg) // Todo: handle error.
+	msgJson, err := json.Marshal(msg)
 	if err != nil {
-		log.Fatalf("Could not marshal message %v: %s", msg, err)
+		log.Error("Could not marshal message %v: %s", msg, err)
+		// Guess there isn't much we can do at this point but to move on.
+		client.obsChannel <- observability.KafkaError
 	}
 	log.Tracef("Kafka(%s): %s", client.topic, string(msgJson))
 	kMsg := gokafka.Message{
 		Value: msgJson}
 	err = client.writer.WriteMessages(ctx, kMsg)
+	// Todo: Handle this error specifically.
+	// Kafka: Error while writing: context canceled
+	// If we're shutting down there is no point in doing anything else.
 	if err != nil {
 		client.obsChannel <- observability.KafkaError
-		log.Fatalf("Kafka: Error while writing: %s", err) // Todo: Improve error handling. Do something smart.
+		log.Errorf("Kafka: Error while writing: %s", err)
+		return false
 	} else {
 		client.obsChannel <- observability.KafkaSent
 	}
 	log.Trace("Message written.")
+	return true
 }
 
-func Run(ctx context.Context, params KafkaParams) {
-
-	client := kafkaClient{
-		broker:     params.Broker,
-		port:       params.Port,
-		ch:         params.Channel,
-		waitGroup:  params.WaitGroup,
-		topic:      params.Topic,
-		writer:     getWriter(),
-		obsChannel: params.ObsChannel,
+func sendTestMessage(ctx context.Context, client kafkaClient) bool {
+	testMsg := KafkaMessage{
+		Topic:   "test",
+		Content: []byte("Just a test"),
 	}
+	return handleMessageWrite(ctx, testMsg, client)
+}
 
-	go client.mainloop(ctx)
+// Run Constructor. Sort of.
+func Run(ctx context.Context, params KafkaParams) {
+	// This should be fairly easy to test in case we wanna mock Kafka.
+	client := kafkaClient{
+		broker:       params.Broker,
+		port:         params.Port,
+		ch:           params.Channel,
+		waitGroup:    params.WaitGroup,
+		topic:        params.Topic,
+		writer:       getWriter(),
+		obsChannel:   params.ObsChannel,
+		writeHandler: handleMessageWrite,
+	}
+	go mainloop(ctx, client)
 	log.Debugf("Kafka writer setup against %s:%d", client.broker, client.port)
 
 }
 
-func (client kafkaClient) mainloop(ctx context.Context) {
+func mainloop(ctx context.Context, client kafkaClient) {
 	client.waitGroup.Add(1)
 	keepRunning := true
 
+	msgBuffer := make([]KafkaMessage, 0) // Buffer to store things if Kafka is causing issues.
+	var failed bool
+	var lastAttempt time.Time
 	for keepRunning {
 		select {
 		case <-ctx.Done():
 			log.Info("Kafka writer shutting down")
 			keepRunning = false
 		case msg := <-client.ch:
-			client.handleMessageWrite(ctx, msg)
+			if !failed {
+				// We assume Kafka is up.
+				success := client.writeHandler(ctx, msg, client)
+				if !success {
+					msgBuffer = append(msgBuffer, msg) // spool the message.
+					failed = true
+					lastAttempt = time.Now() // Time of last failure.
+				}
+			} else {
+				// Here we're in trouble. We assume Kafka is down. We retest every 10s until we get it working again.
+
+				// Less than 10s since last try. Just spool the message.
+				if time.Since(lastAttempt) < 10*time.Second {
+					msgBuffer = append(msgBuffer, msg)
+					log.Infof("Message spooled. Currently %d messages in the spool.", len(msgBuffer))
+				} else {
+					// more than 10s passed. Lets try a test message.
+					success := sendTestMessage(ctx, client)
+					if success {
+						log.Info("Kafka has recovered")
+						// De-spool the messages here.
+						failed = false
+						lastAttempt = time.Now()
+						// Actual de-spool here.
+						msgBuffer, failed = despool(ctx, msgBuffer, client)
+					} else {
+						// We're still down. Just append another message
+						log.Warn("Kafka is still down. Will retry in 10s")
+						msgBuffer = append(msgBuffer, msg)
+					}
+				}
+
+			}
 		}
 	}
+	log.Info("Kafka done.")
 	client.waitGroup.Done()
+}
+
+func despool(ctx context.Context, buffer []KafkaMessage, client kafkaClient) ([]KafkaMessage, bool) {
+	failed := false
+	for i, msg := range buffer {
+		success := client.writeHandler(ctx, msg, client)
+		if success {
+			continue
+		}
+		// Gosh darn it! Kafka is down again.
+		// i should point at the last successful message we sent.
+		// If we didn't send any it'll be 0.
+		buffer = buffer[i:]
+		failed = true
+	}
+
+	return buffer, failed
 }

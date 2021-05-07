@@ -27,7 +27,7 @@ type MqttChannelMessage struct {
 type MessageChannel chan MqttChannelMessage
 
 type mqttClient struct {
-	client     paho.Client
+	paho       paho.Client
 	tlsConfig  *tls.Config
 	broker     string
 	port       int

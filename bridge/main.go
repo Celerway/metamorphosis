@@ -14,6 +14,7 @@ import (
 	"runtime"
 	"sync"
 	"syscall"
+	"time"
 )
 
 // import "github.com/celerway/metamorphosis/bridge/mqtt"
@@ -46,14 +47,19 @@ func Run(params BridgeParams) {
 	var wg sync.WaitGroup
 
 	tlsConfig := NewTlsConfig(params.TlsRootCrtFile, params.ClientCertFile, params.ClientKeyFile)
+
+	// In order to avoid hanging when we shut down we shutdown things in a certain order. So we use multiple contexts
+	// to do this.
 	rootCtx := context.Background()
-	ctx, cancel := context.WithCancel(rootCtx)
+	mqttCtx, mqttCancel := context.WithCancel(rootCtx)   // Mqtt client. Shutdown first.
+	kafkaCtx, kafkaCancel := context.WithCancel(rootCtx) // Kafka, shutdown after mqtt.
+	mainCtx, mainCancel := context.WithCancel(rootCtx)   // Bridge and obs. Shutdown last.
 
 	obsChan := observability.GetChannel()
 
 	br := bridge{
-		mqttCh:    make(mqtt.MessageChannel),
-		kafkaCh:   make(kafka.MessageChannel),
+		mqttCh:    make(mqtt.MessageChannel, 0),
+		kafkaCh:   make(kafka.MessageChannel, 0),
 		waitGroup: &wg,
 	}
 
@@ -80,10 +86,10 @@ func Run(params BridgeParams) {
 		Waitgroup: &wg,
 	}
 	// Start the goroutines that do the work.
-	mqtt.Run(ctx, mqttParams)
-	kafka.Run(ctx, kafkaParams)
-	br.run(ctx)
-	observability.Run(ctx, obsParams)
+	mqtt.Run(mqttCtx, mqttParams)
+	kafka.Run(kafkaCtx, kafkaParams)
+	br.run(mainCtx)
+	observability.Run(mainCtx, obsParams)
 
 	log.Debug("MQTT receiver running")
 
@@ -97,8 +103,12 @@ func Run(params BridgeParams) {
 		log.Debug("Signal listening goroutine is running.")
 		select {
 		case <-sigChan:
-			cancel()
-			log.Warn("Cancel sent to workers. Waiting for workers to exit cleanly")
+			log.Warn("Cancelled context. Initiating shutdown.")
+			mqttCancel()
+			time.Sleep(1 * time.Second)
+			kafkaCancel()
+			time.Sleep(1 * time.Second)
+			mainCancel()
 			wg.Done()
 			return
 		}
@@ -106,5 +116,5 @@ func Run(params BridgeParams) {
 	log.Trace("Main goroutine waiting for bridge shutdown.")
 	wg.Wait()
 	log.Infof("Program exiting. There are currently %d goroutines: ", runtime.NumGoroutine())
-	cancel()
+	mainCancel()
 }

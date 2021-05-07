@@ -18,6 +18,7 @@ func (obs observability) mainloop(ctx context.Context) {
 	for keepRunning {
 		select {
 		case <-ctx.Done():
+			log.Info("obs: context cancelled")
 			keepRunning = false
 		case msg := <-obs.channel:
 			obs.handleChannelMessage(msg)

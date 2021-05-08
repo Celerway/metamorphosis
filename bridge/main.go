@@ -58,10 +58,10 @@ func Run(params BridgeParams) {
 		Channel: obsChan,
 	}
 	// Start the goroutines that do the work.
-	mqtt.Run(mqttCtx, mqttParams)
-	kafka.Run(kafkaCtx, kafkaParams)
-	br.run()
-	observability.Run(obsParams)
+	br.run()                         // Start the bridge so MQTT can send messages to Kafka.
+	kafka.Run(kafkaCtx, kafkaParams) // start the writer.
+	mqtt.Run(mqttCtx, mqttParams)    // Then connect to MQTT
+	observability.Run(obsParams)     // Fire up obs. This will start responding to /health
 
 	sigChan := make(chan os.Signal)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)

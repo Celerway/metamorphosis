@@ -36,7 +36,9 @@ func Run(ctx context.Context, params MqttParams) {
 	opts.SetConnectionLostHandler(client.handleDisconnect)
 	pahoClient := paho.NewClient(opts)
 	client.paho = pahoClient
-	client.logger.Debug("Spinning off the MQTT worker")
+	client.connect()   // blocks and aborts on failure.
+	client.subscribe() //  blocks. Also sets up handlers.
+	client.logger.Info("Starting MQTT client worker")
 	go client.mainloop(ctx)
 }
 
@@ -45,15 +47,9 @@ func Run(ctx context.Context, params MqttParams) {
 // Connects to the MQTT broker, subscribes and processes messages.
 // All the works happens in the event handler.
 func (client mqttClient) mainloop(ctx context.Context) {
-	client.logger.Debug("In mqtt main loop")
 	client.waitGroup.Add(1)
-
-	client.connect()
-	client.subscribe() // Also sets up handlers.
-
 	// Here we start blocking the goroutine and wait for shutdown.
 	// If we need to keep track of something we can wrap this in a loop
-	// Just be sure not to introduce any races.
 	select {
 	case <-ctx.Done():
 		client.logger.Debug("MQTT client shutting down.")

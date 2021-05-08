@@ -26,20 +26,23 @@ func Run(ctx context.Context, params KafkaParams) {
 		logger:       log.WithFields(log.Fields{"module": "kafka"}),
 	}
 	client.writer = getWriter(client.logger) // Give it the context aware logger.
+
+	// Sends a test message to Kafka. This will block Run so when Run returns we
+	// know we're OK.
+	if !sendTestMessage(ctx, client) {
+		client.logger.Fatalf("Can't send test message on startup. Aborting.")
+	}
 	go mainloop(ctx, client)
-	client.logger.Debugf("Kafka writer setup against %s:%d", client.broker, client.port)
 
 }
 
 func mainloop(ctx context.Context, client kafkaClient) {
 	client.waitGroup.Add(1)
-	if !sendTestMessage(ctx, client) {
-		client.logger.Fatalf("Can't send test message on startup. Aborting.")
-	}
 	keepRunning := true
 	msgBuffer := make([]KafkaMessage, 0) // Buffer to store things if Kafka is causing issues.
 	var failed bool
 	var lastAttempt time.Time
+	client.logger.Debugf("Kafka writer running %s:%d", client.broker, client.port)
 	for keepRunning {
 		select {
 		case <-ctx.Done():

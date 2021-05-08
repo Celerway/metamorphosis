@@ -48,6 +48,10 @@ Six goroutines should be running at any point in time:
  * one is listening for observability events on the observability channel and updates the prom counters
  * one silly little one is just listening for SIGTERM and SIGINT
 
+### Todo: Tls against Kafka
+
+We don't need this ourselves, but PRs are welcome. Should be too hard. #goodfirsttask
+
 ### Todo: testing
 
 Testing will happen something like this. 
@@ -70,6 +74,7 @@ reject the message or warn of the message doesn't pass validation.
 ### Todo: Support for multiple subscriptions.
 
 Perhaps this could be done as simply as setting MQTT_TOPIC to several strings separated 
-by , og ; or similar.
+by , og ; or similar. We don't need this ourselves, but PRs are welcome. Should be too hard. #goodfirsttask
+
 
 

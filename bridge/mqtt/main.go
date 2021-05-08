@@ -6,6 +6,7 @@ import (
 	"github.com/celerway/metamorphosis/bridge/observability"
 	paho "github.com/eclipse/paho.mqtt.golang"
 	log "github.com/sirupsen/logrus"
+	"time"
 )
 
 func Run(ctx context.Context, p MqttParams) {
@@ -45,7 +46,7 @@ func (client mqttClient) mainloop(ctx context.Context) {
 	log.Debug("In mqtt main loop")
 	client.waitGroup.Add(1)
 
-	client.handleConnect()
+	client.connect()
 	client.subscribe() // Also sets up handlers.
 
 	// Here we start blocking the goroutine and wait for shutdown.
@@ -55,8 +56,9 @@ func (client mqttClient) mainloop(ctx context.Context) {
 	case <-ctx.Done():
 		log.Debug("MQTT client shutting down.")
 		// Todo: There seems to be a race condition in the Paho Mqtt library that
-		// we trigger here from time to time.
+		// we trigger here from time to time. So, lets try to disconnect cleanly.
 		client.unsubscribe()
+		time.Sleep(100 * time.Millisecond)
 		client.paho.Disconnect(100)
 		log.Debug("MQTT disconnected")
 	}
@@ -65,9 +67,9 @@ func (client mqttClient) mainloop(ctx context.Context) {
 	log.Info("MQTT client exiting")
 }
 
-// handleConnect
+// connect
 // Connects to the broker. Blocks until the connection is established.
-func (client *mqttClient) handleConnect() {
+func (client *mqttClient) connect() {
 	log.Debug("MQTT client starting connect to broker.")
 	token := client.paho.Connect()
 	if token.Wait() && token.Error() != nil {
@@ -81,8 +83,7 @@ func (client *mqttClient) handleConnect() {
 func (client *mqttClient) handleDisconnect(pahoClient paho.Client, err error) {
 	log.Errorf("handleDisconnect invoked with error: %s", err)
 	log.Info("Reconnecting to broker.")
-	client.handleConnect()
-
+	client.connect()
 }
 
 func (client mqttClient) unsubscribe() {

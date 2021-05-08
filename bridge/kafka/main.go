@@ -121,6 +121,7 @@ func getWriter(logger *log.Entry) *gokafka.Writer {
 
 // The handler that gets called when we get a message.
 func handleMessageWrite(ctx context.Context, msg KafkaMessage, client kafkaClient) bool {
+	startWriteTime := time.Now()
 	client.logger.Trace("Issuing write to kafka (mqtt topic: %s)", msg.Topic)
 	msgJson, err := json.Marshal(msg)
 	if err != nil {
@@ -142,7 +143,7 @@ func handleMessageWrite(ctx context.Context, msg KafkaMessage, client kafkaClien
 	} else {
 		client.obsChannel <- observability.KafkaSent
 	}
-	client.logger.Trace("Message written.")
+	client.logger.Debugf("Write done. Took %v", time.Since(startWriteTime))
 	return true
 }
 

@@ -24,6 +24,7 @@ func (obs observability) mainloop() {
 func Run(params ObservabilityParams) {
 	obs := observability{
 		channel: params.Channel,
+		logger:  log.WithFields(log.Fields{"module": "observability"}),
 	}
 
 	obs.mqttReceived = promauto.NewCounter(prometheus.CounterOpts{
@@ -47,17 +48,17 @@ func Run(params ObservabilityParams) {
 }
 
 func (obs observability) httpStuff() {
-	// We don't care about waitgroups and stuff here. We can be aborted at any time.
+	// We don't care about waitGroups and stuff here. We can be aborted at any time.
 	router := mux.NewRouter().StrictSlash(true)
 	router.Handle("/metrics", promhttp.Handler())
 	router.HandleFunc("/healthz", SillyHealthzHandler)
 	listenPort := ":8080"
-	log.Infof("Observability service attempting to listen to port %s", listenPort)
-	log.Fatal(http.ListenAndServe(fmt.Sprintf("%s", listenPort), router))
+	obs.logger.Infof("Observability service attempting to listen to port %s", listenPort)
+	obs.logger.Fatal(http.ListenAndServe(fmt.Sprintf("%s", listenPort), router))
 }
 
 func (obs observability) handleChannelMessage(msg StatusMessage) {
-	log.Debugf("Observability received %s", msg)
+	obs.logger.Debugf("Observability received %s", msg)
 
 	switch msg {
 	case MqttRecieved:
@@ -69,7 +70,7 @@ func (obs observability) handleChannelMessage(msg StatusMessage) {
 	case KafkaError:
 		obs.kafkaErrors.Inc()
 	default:
-		log.Errorf("Observability: Unknown message recived")
+		obs.logger.Errorf("Observability: Unknown message recived")
 	}
 }
 

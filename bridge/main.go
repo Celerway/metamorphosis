@@ -21,8 +21,6 @@ import (
 func Run(params BridgeParams) {
 	var wg sync.WaitGroup
 
-	tlsConfig := NewTlsConfig(params.TlsRootCrtFile, params.MqttClientCertFile, params.MqttClientKeyFile)
-
 	// In order to avoid hanging when we shut down we shutdown things in a certain order. So we use two contexts
 	// to do this.
 	rootCtx := context.Background()
@@ -32,9 +30,11 @@ func Run(params BridgeParams) {
 	obsChan := observability.GetChannel()
 
 	br := bridge{
-		mqttCh:  make(mqtt.MessageChannel, 0),
-		kafkaCh: make(kafka.MessageChannel, 0),
+		mqttCh:  make(mqtt.MessageChannel, 0),  // For pure performance these should be buffered
+		kafkaCh: make(kafka.MessageChannel, 0), // However, this could hide potential dead locks.
+		logger:  log.WithFields(log.Fields{"module": "bridge"}),
 	}
+	tlsConfig := NewTlsConfig(params.TlsRootCrtFile, params.MqttClientCertFile, params.MqttClientKeyFile, br.logger)
 
 	mqttParams := mqtt.MqttParams{
 		TlsConfig:  tlsConfig,
@@ -63,8 +63,6 @@ func Run(params BridgeParams) {
 	br.run()
 	observability.Run(obsParams)
 
-	log.Debug("MQTT receiver running")
-
 	sigChan := make(chan os.Signal)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	// Spin off a goroutine that will wait for SIGNALs and cancel the context.
@@ -72,39 +70,39 @@ func Run(params BridgeParams) {
 	// this is a good place.
 	go func() {
 		wg.Add(1)
-		log.Debug("Signal listening goroutine is running.")
+		br.logger.Debug("Signal listening goroutine is running.")
 		select {
 		case <-sigChan:
-			log.Warn("Cancelled context. Initiating shutdown.")
+			br.logger.Warn("Cancelled context. Initiating shutdown.")
 			mqttCancel()
-			time.Sleep(2 * time.Second)
+			time.Sleep(5 * time.Second) // This should be enough to make sure Kafka is flushed out.
 			kafkaCancel()
 			wg.Done()
 			return
 		}
 	}()
-	log.Trace("Main goroutine waiting for bridge shutdown.")
+	br.logger.Trace("Main goroutine waiting for bridge shutdown.")
 	wg.Wait()
-	log.Infof("Program exiting. There are currently %d goroutines: ", runtime.NumGoroutine())
+	br.logger.Infof("Program exiting. There are currently %d goroutines: ", runtime.NumGoroutine())
 }
 
-func NewTlsConfig(caFile, clientCertFile, clientKeyFile string) *tls.Config {
-	certpool := x509.NewCertPool()
+func NewTlsConfig(caFile, clientCertFile, clientKeyFile string, logger *log.Entry) *tls.Config {
+	certPool := x509.NewCertPool()
 	ca, err := ioutil.ReadFile(caFile)
 	if err != nil {
 		log.Fatalln(err.Error())
 	}
-	certpool.AppendCertsFromPEM(ca)
+	certPool.AppendCertsFromPEM(ca)
 	// Import client certificate/key pair
 	clientKeyPair, err := tls.LoadX509KeyPair(clientCertFile, clientKeyFile)
 	if err != nil {
-		log.Fatalf("tls.LoadX509KeyPair(%s,%s): %s", clientCertFile, clientKeyFile, err)
+		logger.Fatalf("tls.LoadX509KeyPair(%s,%s): %s", clientCertFile, clientKeyFile, err)
 		panic(err)
 	}
-	log.Debugf("Initialized TLS Client config with CA (%s) Client cert/key (%s/%s)",
+	logger.Debugf("Initialized TLS Client config with CA (%s) Client cert/key (%s/%s)",
 		caFile, clientCertFile, clientKeyFile)
 	return &tls.Config{
-		RootCAs:            certpool,
+		RootCAs:            certPool,
 		ClientAuth:         tls.NoClientCert,
 		ClientCAs:          nil,
 		InsecureSkipVerify: false,

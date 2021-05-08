@@ -12,61 +12,6 @@ import (
 	"time"
 )
 
-func getInt(s string) int {
-	val, err := strconv.Atoi(s)
-	if err != nil {
-		log.Errorf("getInt failed on %s: %s", s, err)
-	}
-	return val
-}
-
-// This creates a write struct. Used when initializing.
-func getWriter() *gokafka.Writer {
-	broker := fmt.Sprintf("%s:%d",
-		os.Getenv("KAFKA_BROKER"), getInt(os.Getenv("KAFKA_PORT")))
-	w := &gokafka.Writer{
-		Addr:     gokafka.TCP(broker),
-		Topic:    os.Getenv("KAFKA_TOPIC"),
-		Balancer: &gokafka.LeastBytes{},
-	}
-	return w
-}
-
-// The handler that gets called when we get a message.
-func handleMessageWrite(ctx context.Context, msg KafkaMessage, client kafkaClient) bool {
-	log.Debug("Issuing write to kafka")
-	msgJson, err := json.Marshal(msg)
-	if err != nil {
-		log.Error("Could not marshal message %v: %s", msg, err)
-		// Guess there isn't much we can do at this point but to move on.
-		client.obsChannel <- observability.KafkaError
-	}
-	log.Tracef("Kafka(%s): %s", client.topic, string(msgJson))
-	kMsg := gokafka.Message{
-		Value: msgJson}
-	err = client.writer.WriteMessages(ctx, kMsg)
-	// Todo: Handle this error specifically.
-	// Kafka: Error while writing: context canceled
-	// If we're shutting down there is no point in doing anything else.
-	if err != nil {
-		client.obsChannel <- observability.KafkaError
-		log.Errorf("Kafka: Error while writing: %s", err)
-		return false
-	} else {
-		client.obsChannel <- observability.KafkaSent
-	}
-	log.Trace("Message written.")
-	return true
-}
-
-func sendTestMessage(ctx context.Context, client kafkaClient) bool {
-	testMsg := KafkaMessage{
-		Topic:   "test",
-		Content: []byte("Just a test"),
-	}
-	return handleMessageWrite(ctx, testMsg, client)
-}
-
 // Run Constructor. Sort of.
 func Run(ctx context.Context, params KafkaParams) {
 	// This should be fairly easy to test in case we wanna mock Kafka.
@@ -76,19 +21,20 @@ func Run(ctx context.Context, params KafkaParams) {
 		ch:           params.Channel,
 		waitGroup:    params.WaitGroup,
 		topic:        params.Topic,
-		writer:       getWriter(),
 		obsChannel:   params.ObsChannel,
 		writeHandler: handleMessageWrite,
+		logger:       log.WithFields(log.Fields{"module": "kafka"}),
 	}
+	client.writer = getWriter(client.logger) // Give it the context aware logger.
 	go mainloop(ctx, client)
-	log.Debugf("Kafka writer setup against %s:%d", client.broker, client.port)
+	client.logger.Debugf("Kafka writer setup against %s:%d", client.broker, client.port)
 
 }
 
 func mainloop(ctx context.Context, client kafkaClient) {
 	client.waitGroup.Add(1)
 	if !sendTestMessage(ctx, client) {
-		log.Fatalf("Can't send test message on startup. Aborting.")
+		client.logger.Fatalf("Can't send test message on startup. Aborting.")
 	}
 	keepRunning := true
 	msgBuffer := make([]KafkaMessage, 0) // Buffer to store things if Kafka is causing issues.
@@ -97,7 +43,7 @@ func mainloop(ctx context.Context, client kafkaClient) {
 	for keepRunning {
 		select {
 		case <-ctx.Done():
-			log.Info("Kafka writer shutting down")
+			client.logger.Info("Kafka writer shutting down")
 			keepRunning = false
 		case msg := <-client.ch:
 			if !failed { // We assume Kafka is up.
@@ -111,24 +57,26 @@ func mainloop(ctx context.Context, client kafkaClient) {
 				// Here we're in trouble. We assume Kafka is down. We retest every 10s until we get it working again.
 				if time.Since(lastAttempt) < 10*time.Second { // Less than 10s since last try. Just spool the message.
 					msgBuffer = append(msgBuffer, msg)
-					log.Infof("Message spooled. Currently %d messages in the spool.", len(msgBuffer))
+					// Todo: Should we limit the number of messages we can spool?
+					// Now the heap will just grow and grow until it ooms.
+					client.logger.Infof("Message spooled. Currently %d messages in the spool.", len(msgBuffer))
 				} else {
 					// more than 10s passed. Lets try a test message.
 					success := sendTestMessage(ctx, client)
 					if success {
-						log.Info("Kafka has recovered")
+						client.logger.Info("Kafka has recovered")
 						failed = false
 						lastAttempt = time.Now()
 						msgBuffer, failed = despool(ctx, msgBuffer, client) // Actual de-spool here.
 					} else {
-						log.Warn("Kafka is still down. Will retry in 10s")
+						client.logger.Warn("Kafka is still down. Will retry in 10s")
 						msgBuffer = append(msgBuffer, msg)
 					}
 				}
 			}
 		}
 	}
-	log.Info("Kafka done.")
+	client.logger.Info("Kafka done.")
 	client.waitGroup.Done()
 }
 
@@ -147,4 +95,60 @@ func despool(ctx context.Context, buffer []KafkaMessage, client kafkaClient) ([]
 	}
 
 	return buffer, failed
+}
+func getInt(s string, logger *log.Entry) int {
+	val, err := strconv.Atoi(s)
+	if err != nil {
+		logger.Errorf("getInt failed on %s: %s", s, err)
+	}
+	return val
+}
+
+// This creates a write struct. Used when initializing.
+func getWriter(logger *log.Entry) *gokafka.Writer {
+	broker := fmt.Sprintf("%s:%d",
+		os.Getenv("KAFKA_BROKER"), getInt(os.Getenv("KAFKA_PORT"), logger))
+	w := &gokafka.Writer{
+		Addr:     gokafka.TCP(broker),
+		Topic:    os.Getenv("KAFKA_TOPIC"),
+		Balancer: &gokafka.LeastBytes{},
+	}
+	return w
+}
+
+// The handler that gets called when we get a message.
+func handleMessageWrite(ctx context.Context, msg KafkaMessage, client kafkaClient) bool {
+	client.logger.Trace("Issuing write to kafka (mqtt topic: %s)", msg.Topic)
+	msgJson, err := json.Marshal(msg)
+	if err != nil {
+		client.logger.Error("Could not marshal message %v: %s", msg, err)
+		// Guess there isn't much we can do at this point but to move on.
+		client.obsChannel <- observability.KafkaError
+		return true // We ignore these errors. No sense in re-trying.
+	}
+	client.logger.Tracef("Kafka(%s): %s", client.topic, string(msgJson))
+	kMsg := gokafka.Message{
+		Value: msgJson}
+	err = client.writer.WriteMessages(ctx, kMsg)
+	// Todo: Handle this error specifically Kafka: Error while writing: context canceled
+	// If we're shutting down there is no point in doing anything else.
+	if err != nil {
+		client.obsChannel <- observability.KafkaError
+		client.logger.Errorf("Kafka: Error while writing: %s", err)
+		return false
+	} else {
+		client.obsChannel <- observability.KafkaSent
+	}
+	client.logger.Trace("Message written.")
+	return true
+}
+
+// sendTestMessage sends a test message with the mqtt topic "test".
+// You wanna ignore these messages in the Kafka consumers.
+func sendTestMessage(ctx context.Context, client kafkaClient) bool {
+	testMsg := KafkaMessage{
+		Topic:   "test",
+		Content: []byte("Just a test"),
+	}
+	return handleMessageWrite(ctx, testMsg, client)
 }

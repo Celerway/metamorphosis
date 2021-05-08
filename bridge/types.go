@@ -3,6 +3,7 @@ package bridge
 import (
 	"github.com/celerway/metamorphosis/bridge/kafka"
 	"github.com/celerway/metamorphosis/bridge/mqtt"
+	log "github.com/sirupsen/logrus"
 )
 
 type BridgeParams struct {
@@ -21,4 +22,5 @@ type BridgeParams struct {
 type bridge struct {
 	mqttCh  mqtt.MessageChannel
 	kafkaCh kafka.MessageChannel
+	logger  *log.Entry
 }

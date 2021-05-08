@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/celerway/metamorphosis/bridge/observability"
 	gokafka "github.com/segmentio/kafka-go"
+	log "github.com/sirupsen/logrus"
 	"sync"
 )
 
@@ -34,4 +35,5 @@ type kafkaClient struct {
 	writer       *gokafka.Writer
 	obsChannel   observability.ObservabilityChannel
 	writeHandler func(ctx context.Context, msg KafkaMessage, client kafkaClient) bool
+	logger       *log.Entry
 }

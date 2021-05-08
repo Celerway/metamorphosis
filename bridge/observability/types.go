@@ -2,6 +2,7 @@ package observability
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
+	log "github.com/sirupsen/logrus"
 )
 
 type ObservabilityChannel chan StatusMessage
@@ -29,4 +30,5 @@ type observability struct {
 	mqttErrors   prometheus.Counter
 	kafkaSent    prometheus.Counter
 	kafkaErrors  prometheus.Counter
+	logger       *log.Entry
 }

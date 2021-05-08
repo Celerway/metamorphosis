@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"github.com/celerway/metamorphosis/bridge/observability"
 	paho "github.com/eclipse/paho.mqtt.golang"
+	log "github.com/sirupsen/logrus"
 	"sync"
 )
 
@@ -37,4 +38,5 @@ type mqttClient struct {
 	waitGroup  *sync.WaitGroup
 	topic      string
 	obsChannel observability.ObservabilityChannel
+	logger     *log.Entry
 }

@@ -81,3 +81,7 @@ Depending on configuration the bridge will either reject the message or warn of 
 Perhaps this could be done as simply as setting MQTT_TOPIC to several strings separated by , og ; or similar. We don't
 need this ourselves, but PRs are welcome. Should be too hard. #goodfirsttask
 
+### Todo: Performance
+
+I've not given this much thought. We might want to write in batches, utilize a worker pool or add a few other tricks
+to achieve reasonable performance.

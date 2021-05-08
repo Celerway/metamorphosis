@@ -31,4 +31,5 @@ type observability struct {
 	kafkaSent    prometheus.Counter
 	kafkaErrors  prometheus.Counter
 	logger       *log.Entry
+	ready        bool
 }

@@ -87,8 +87,10 @@ func Run(ctx context.Context, params KafkaParams) {
 
 func mainloop(ctx context.Context, client kafkaClient) {
 	client.waitGroup.Add(1)
+	if !sendTestMessage(ctx, client) {
+		log.Fatalf("Can't send test message on startup. Aborting.")
+	}
 	keepRunning := true
-
 	msgBuffer := make([]KafkaMessage, 0) // Buffer to store things if Kafka is causing issues.
 	var failed bool
 	var lastAttempt time.Time
@@ -98,9 +100,8 @@ func mainloop(ctx context.Context, client kafkaClient) {
 			log.Info("Kafka writer shutting down")
 			keepRunning = false
 		case msg := <-client.ch:
-			if !failed {
-				// We assume Kafka is up.
-				success := client.writeHandler(ctx, msg, client)
+			if !failed { // We assume Kafka is up.
+				success := client.writeHandler(ctx, msg, client) // Send msg. Get back status.
 				if !success {
 					msgBuffer = append(msgBuffer, msg) // spool the message.
 					failed = true
@@ -108,9 +109,7 @@ func mainloop(ctx context.Context, client kafkaClient) {
 				}
 			} else {
 				// Here we're in trouble. We assume Kafka is down. We retest every 10s until we get it working again.
-
-				// Less than 10s since last try. Just spool the message.
-				if time.Since(lastAttempt) < 10*time.Second {
+				if time.Since(lastAttempt) < 10*time.Second { // Less than 10s since last try. Just spool the message.
 					msgBuffer = append(msgBuffer, msg)
 					log.Infof("Message spooled. Currently %d messages in the spool.", len(msgBuffer))
 				} else {
@@ -118,18 +117,14 @@ func mainloop(ctx context.Context, client kafkaClient) {
 					success := sendTestMessage(ctx, client)
 					if success {
 						log.Info("Kafka has recovered")
-						// De-spool the messages here.
 						failed = false
 						lastAttempt = time.Now()
-						// Actual de-spool here.
-						msgBuffer, failed = despool(ctx, msgBuffer, client)
+						msgBuffer, failed = despool(ctx, msgBuffer, client) // Actual de-spool here.
 					} else {
-						// We're still down. Just append another message
 						log.Warn("Kafka is still down. Will retry in 10s")
 						msgBuffer = append(msgBuffer, msg)
 					}
 				}
-
 			}
 		}
 	}

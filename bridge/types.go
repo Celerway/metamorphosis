@@ -6,16 +6,16 @@ import (
 )
 
 type BridgeParams struct {
-	MqttBroker     string
-	Tls            bool
-	MqttPort       int
-	TlsRootCrtFile string
-	ClientCertFile string
-	ClientKeyFile  string
-	MqttTopic      string
-	KafkaBroker    string
-	KafkaPort      int
-	KafkaTopic     string
+	MqttBroker         string
+	MqttTls            bool
+	MqttPort           int
+	TlsRootCrtFile     string
+	MqttClientCertFile string
+	MqttClientKeyFile  string
+	MqttTopic          string
+	KafkaBroker        string
+	KafkaPort          int
+	KafkaTopic         string
 }
 
 type bridge struct {

@@ -1,21 +1,26 @@
 # Metamorphosis
 
 A simple MQTT -> Kafka bridge and concentrator.
-(Note that we'll use Red Panda instead of Kafka. It is simpler and faster, and claims protocol compatibility 
-with Kafka). You should consider it.
+Note that we'll use Red Panda instead of Kafka. It is simpler and faster, and claims protocol compatibility 
+with Kafka. You should consider it.
 
 This is a protocol bridge between MQTT and Kafka. It'll connect to a broker, subscription and listen
-for messages. When a message is received, we'll give it to kafka.
+for messages. When a message is received, we'll give it to kafka. It is meant to be running in a k8s pod.
 
-If Kafka is unavailable we'll try to spool the messages to local storage, so they can be recovered. 
-Not sure about the details here, but I suspect we can dump streams of JSON in some format that 
-can be easily ingested into Kafka / Red Panda.
+If Kafka is unavailable we'll try to spool the messages to memory, so they can be recovered. If we can't write 
+to Kafka, we'll retry every 10 seconds. Once we reconnect, we dump all the messages we have.
 
-Metamorphosis will listen on PROM_PORT (cleartext http) and deliver metrics if a client 
-requests `/metrics`.
+Metamorphosis will listen on `HEALTH_PORT` (cleartext http) and deliver metrics if a client 
+requests `/metrics`. We'll also answer /healthz, so you can have k8s poll this url.
 
 Note that you need to make sure that the topic exists in Red Panda / Kafka or that auto creation
 of topics is enabled.
+
+Note that there are limited guarantees given. We try to keep messages ordered. However, during restart, k8s will start
+a new instance of the daemon before the old one is shut down. During this short period you'll see messages duplicates.
+
+Also note that the bridge will issue messages in order to test that it can talk to Kafka. These will be given the 
+MQTT topic "test". Ignore these messages in your consumer.
 
 ## Message format
 
@@ -37,7 +42,7 @@ Three main packages
  * mqtt contains the mqtt stuff
  * kafka for the kafka stuff
 
-In addition, there is an observability package which deals with prometheus stuff.
+In addition, there is an observability package which deals with prometheus stuff and responds to k8s health checks.
 
 Six goroutines should be running at any point in time:
  * one is listening to MQTT
@@ -76,5 +81,8 @@ reject the message or warn of the message doesn't pass validation.
 Perhaps this could be done as simply as setting MQTT_TOPIC to several strings separated 
 by , og ; or similar. We don't need this ourselves, but PRs are welcome. Should be too hard. #goodfirsttask
 
+### Todo: Don't answer the health checks until both the mqtt and kafka clients are up.
+
+Currently, we'll respond right away. This could potentially cause you to lose messages during upgrades.
 
 

@@ -37,6 +37,27 @@ type Message struct {
 So, then reading from Kafka we'll need to look at the topic and call the relevant handler for that type of message. We
 don't really know what is inside the actual message we get from MQTT, so the content of the message is base64 encoded.
 
+## Development
+
+You'll need an .env file to run this locally or command line options. I recommend having a ssh port forward
+to a Kafka server.
+
+Suggest `.env` file:
+```
+LOG_LEVEL=trace
+ROOT_CA=.tls/ca.pem
+MQTT_CLIENT_CERT=.tls/client.pem
+MQTT_CLIENT_KEY=.tls/client.key
+
+MQTT_BROKER=localhost
+MQTT_TOPIC="test/#"
+
+KAFKA_BROKER=localhost
+KAFKA_PORT=9092
+KAFKA_TOPIC="mqtt"
+KAFKA_WORKERS=5
+```
+
 ## Design
 
 Three main packages
@@ -99,3 +120,5 @@ need this ourselves, but PRs are welcome. Should be too hard. #goodfirsttask
   I don't see the need of adding this to the bridge.
 * Message validation. Red Panda is working on their schema support. This is likely a better
   place to do validation than in the bridge.
+  
+

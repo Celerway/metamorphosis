@@ -58,6 +58,8 @@ KAFKA_TOPIC="mqtt"
 KAFKA_WORKERS=5
 ```
 
+I use [standard-version](https://www.npmjs.com/package/standard-version) to maintain the changelog and tags.
+
 ## Design
 
 Three main packages

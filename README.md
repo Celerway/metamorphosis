@@ -4,19 +4,21 @@ A simple MQTT -> Kafka bridge and concentrator. Note that we'll use
 [Red Panda](https://github.com/vectorizedio/redpanda) instead of Kafka. It is simpler (no zookeeper) 
 and faster (no JVM), and claims protocol compatibility with Kafka. You should consider it.
 
-This is a protocol bridge between MQTT and Kafka. It'll connect to a broker, subscription and listen for messages. When
-a message is received, we'll give it to kafka. It is meant to be running in a k8s pod.
+This is a protocol bridge between MQTT and Kafka. It'll connect to a broker, using HOSTNAME as the client ID, 
+subscription and listen for messages. When a message is received, we'll give it to kafka. It is meant to
+be running in a k8s pod.
 
-If Kafka is unavailable we'll try to spool the messages to memory, so they can be recovered. If we can't write to Kafka,
-we'll retry every 10 seconds. Once we reconnect, we dump all the messages we have.
+If Kafka is unavailable we'll try to spool the messages to memory, so they can be recovered. If we can't write 
+to Kafka, we'll retry every 10 seconds. Once we reconnect, we dump all the messages we have.
 
 Once Kafka and MQTT are connected, Metamorphosis will listen on `HEALTH_PORT` (cleartext http) and deliver metrics if a
 client requests `/metrics`. We'll also answer /healthz, so you can have k8s poll this url.
 
 Note that you need to make sure that the topic exists in Red Panda / Kafka or that auto creation of topics is enabled.
 
-Note that there are limited guarantees given. We try to keep messages ordered. However, during restart, k8s will start a
-new instance of the daemon before the old one is shut down. During this short period you'll see messages duplicates.
+Note that there are limited guarantees given. We try to keep messages ordered. However, during restart, k8s will 
+start a new instance of the daemon before the old one is shut down. During this short period you'll
+see messages duplicates. Make sure you'll handle these.
 
 Also note that the bridge will issue messages in order to test that it can talk to Kafka. These will be given the MQTT
 topic "test". Ignore these messages in your consumer.
@@ -85,14 +87,15 @@ Testing will happen something like this.
 - inject some errors into the mocked kafka backend
 - verify that the bridge does what it is supposed to do
 
-### Todo: Validation of messages
-
-Not sure if we need this as the messages are validated when they are consumed from Red Panda.
-
-Depending on configuration the bridge will either reject the message or warn of the message doesn't pass validation.
 
 ### Todo: Support for multiple subscriptions.
 
 Perhaps this could be done as simply as setting MQTT_TOPIC to several strings separated by , og ; or similar. We don't
 need this ourselves, but PRs are welcome. Should be too hard. #goodfirsttask
 
+### Things we're not really interested in adding.
+
+* If you need to transform the messages, I would encourage you to look at Red Pandas WASM transformations. 
+  I don't see the need of adding this to the bridge.
+* Message validation. Red Panda is working on their schema support. This is likely a better
+  place to do validation than in the bridge.

@@ -61,8 +61,10 @@ func Run(params BridgeParams) {
 
 	obs := observability.Run(obsParams) // Fire up obs.
 	br.run()                            // Start the bridge so MQTT can send messages to Kafka.
-	kafka.Run(kafkaCtx, kafkaParams)    // start the writer.
-	mqtt.Run(mqttCtx, mqttParams)       // Then connect to MQTT
+	for i := 1; i < params.KafkaWorkers+1; i++ {
+		kafka.Run(kafkaCtx, kafkaParams, i) // start the writer(s).
+	}
+	mqtt.Run(mqttCtx, mqttParams) // Then connect to MQTT
 	obs.Ready()
 
 	sigChan := make(chan os.Signal)

@@ -24,6 +24,7 @@ func main() {
 		kafkaPort            int = 9092
 		kafkaTopic           string
 		healthPort           int = 8080
+		kafkaWorkers         int = 1
 	)
 
 	err := godotenv.Load()
@@ -54,6 +55,8 @@ func main() {
 		LookupEnvOrInt("KAFKA_PORT", kafkaPort), "Kafka broker port")
 	flag.StringVar(&kafkaTopic, "kafka-topic",
 		LookupEnvOrString("KAFKA_TOPIC", kafkaTopic), "Kafka topic to write to")
+	flag.IntVar(&kafkaWorkers, "kafka-workers",
+		LookupEnvOrInt("KAFKA_WORKERS", kafkaWorkers), "Kafka workers")
 	flag.IntVar(&healthPort, "health-port",
 		LookupEnvOrInt("HEALTH_PORT", healthPort), "HTTP port for healthz and prometheus")
 	flag.Parse()
@@ -77,6 +80,7 @@ func main() {
 		KafkaBroker:        kafkaBroker,
 		KafkaPort:          kafkaPort,
 		KafkaTopic:         kafkaTopic,
+		KafkaWorkers:       kafkaWorkers,
 	}
 	log.Infof("Startup options: %v", runConfig)
 	log.Debug("Starting bridge")

@@ -13,7 +13,7 @@ import (
 )
 
 // Run Constructor. Sort of.
-func Run(ctx context.Context, params KafkaParams) {
+func Run(ctx context.Context, params KafkaParams, id int) {
 	// This should be fairly easy to test in case we wanna mock Kafka.
 	client := kafkaClient{
 		broker:       params.Broker,
@@ -23,7 +23,10 @@ func Run(ctx context.Context, params KafkaParams) {
 		topic:        params.Topic,
 		obsChannel:   params.ObsChannel,
 		writeHandler: handleMessageWrite,
-		logger:       log.WithFields(log.Fields{"module": "kafka"}),
+		logger: log.WithFields(log.Fields{
+			"module": "kafka",
+			"worker": fmt.Sprint(id),
+		}),
 	}
 	client.writer = getWriter(client.logger) // Give it the context aware logger.
 
@@ -42,7 +45,7 @@ func mainloop(ctx context.Context, client kafkaClient) {
 	msgBuffer := make([]KafkaMessage, 0) // Buffer to store things if Kafka is causing issues.
 	var failed bool
 	var lastAttempt time.Time
-	client.logger.Debugf("Kafka writer running %s:%d", client.broker, client.port)
+	client.logger.Infof("Kafka writer running %s:%d", client.broker, client.port)
 	for keepRunning {
 		select {
 		case <-ctx.Done():
@@ -115,7 +118,7 @@ func getWriter(logger *log.Entry) *gokafka.Writer {
 		Addr:         gokafka.TCP(broker),
 		Topic:        os.Getenv("KAFKA_TOPIC"),
 		Balancer:     &gokafka.LeastBytes{},
-		BatchTimeout: 0, // Do a sync write, don't wait for anything to batch up.
+		BatchTimeout: 10 * time.Millisecond, // Only give the client 10ms to batch up writes.
 	}
 	return w
 }

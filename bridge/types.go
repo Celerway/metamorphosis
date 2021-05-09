@@ -17,6 +17,7 @@ type BridgeParams struct {
 	KafkaBroker        string
 	KafkaPort          int
 	KafkaTopic         string
+	KafkaWorkers       int
 }
 
 type bridge struct {

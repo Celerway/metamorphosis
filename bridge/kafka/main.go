@@ -28,7 +28,7 @@ func Run(ctx context.Context, params KafkaParams, id int) {
 			"worker": fmt.Sprint(id),
 		}),
 	}
-	client.writer = getWriter(client.logger) // Give it the context aware logger.
+	client.writer = getWriter(client.logger) // Give the writer the context aware logger and store it in the struct.
 
 	// Sends a test message to Kafka. This will block Run so when Run returns we
 	// know we're OK.

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"github.com/celerway/metamorphosis/bridge"
 	"github.com/joho/godotenv"
@@ -84,7 +85,7 @@ func main() {
 	}
 	log.Infof("Startup options: %v", runConfig)
 	log.Debug("Starting bridge")
-	bridge.Run(runConfig)
+	bridge.Run(context.Background(), runConfig)
 
 }
 

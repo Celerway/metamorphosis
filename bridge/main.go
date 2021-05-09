@@ -18,14 +18,13 @@ import (
 	"time"
 )
 
-func Run(params BridgeParams) {
+func Run(ctx context.Context, params BridgeParams) {
 	var wg sync.WaitGroup
 
 	// In order to avoid hanging when we shut down we shutdown things in a certain order. So we use two contexts
 	// to do this.
-	rootCtx := context.Background()
-	mqttCtx, mqttCancel := context.WithCancel(rootCtx)   // Mqtt client. Shutdown first.
-	kafkaCtx, kafkaCancel := context.WithCancel(rootCtx) // Kafka, shutdown after mqtt.
+	mqttCtx, mqttCancel := context.WithCancel(ctx)   // Mqtt client. Shutdown first.
+	kafkaCtx, kafkaCancel := context.WithCancel(ctx) // Kafka, shutdown after mqtt.
 
 	obsChan := observability.GetChannel()
 
@@ -76,8 +75,15 @@ func Run(params BridgeParams) {
 		wg.Add(1)
 		br.logger.Debug("Signal listening goroutine is running.")
 		select {
+		case <-ctx.Done():
+			br.logger.Warn("Context cancelled. Initiating shutdown.")
+			mqttCancel()
+			time.Sleep(5 * time.Second) // This should be enough to make sure Kafka is flushed out.
+			kafkaCancel()
+			wg.Done()
+			return
 		case <-sigChan:
-			br.logger.Warn("Cancelled context. Initiating shutdown.")
+			br.logger.Warn("Signal caught. Initiating shutdown.")
 			mqttCancel()
 			time.Sleep(5 * time.Second) // This should be enough to make sure Kafka is flushed out.
 			kafkaCancel()

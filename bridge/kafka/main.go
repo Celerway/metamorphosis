@@ -112,9 +112,10 @@ func getWriter(logger *log.Entry) *gokafka.Writer {
 	broker := fmt.Sprintf("%s:%d",
 		os.Getenv("KAFKA_BROKER"), getInt(os.Getenv("KAFKA_PORT"), logger))
 	w := &gokafka.Writer{
-		Addr:     gokafka.TCP(broker),
-		Topic:    os.Getenv("KAFKA_TOPIC"),
-		Balancer: &gokafka.LeastBytes{},
+		Addr:         gokafka.TCP(broker),
+		Topic:        os.Getenv("KAFKA_TOPIC"),
+		Balancer:     &gokafka.LeastBytes{},
+		BatchTimeout: 0, // Do a sync write, don't wait for anything to batch up.
 	}
 	return w
 }

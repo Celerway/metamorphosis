@@ -6,6 +6,7 @@ import (
 	"github.com/celerway/metamorphosis/bridge/observability"
 	paho "github.com/eclipse/paho.mqtt.golang"
 	log "github.com/sirupsen/logrus"
+	"os"
 	"time"
 )
 
@@ -16,7 +17,7 @@ func Run(ctx context.Context, params MqttParams) {
 		broker:     params.Broker,
 		port:       params.Port,
 		topic:      params.Topic,
-		clientId:   "metamorphosis", // Todo: Figure out a proper ID
+		clientId:   os.Getenv("HOSTNAME"),
 		tls:        params.Tls,
 		ch:         params.Channel,
 		waitGroup:  params.WaitGroup,

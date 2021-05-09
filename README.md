@@ -1,7 +1,8 @@
 # Metamorphosis
 
-A simple MQTT -> Kafka bridge and concentrator. Note that we'll use Red Panda instead of Kafka. It is simpler and
-faster, and claims protocol compatibility with Kafka. You should consider it.
+A simple MQTT -> Kafka bridge and concentrator. Note that we'll use 
+[Red Panda](https://github.com/vectorizedio/redpanda) instead of Kafka. It is simpler (no zookeeper) 
+and faster (no JVM), and claims protocol compatibility with Kafka. You should consider it.
 
 This is a protocol bridge between MQTT and Kafka. It'll connect to a broker, subscription and listen for messages. When
 a message is received, we'll give it to kafka. It is meant to be running in a k8s pod.
@@ -54,6 +55,20 @@ Six goroutines should be running at any point in time:
 * one is listening for observability events on the observability channel and updates the prom counters
 * one silly little one is just listening for SIGTERM and SIGINT
 
+## Key dependencies
+
+ * [go-kafka](https://github.com/segmentio/kafka-go), a nice native Go Kafka client.
+ * [paho.mqtt.golang](https://github.com/eclipse/paho.mqtt.golang), MQTT client. Doesn't support MQTT 5.
+ * [logrus](https://github.com/sirupsen/logrus), our preferred logger
+
+## Performance
+
+For us the most important thing is reliability. So we do synchronous writes which block the writer. 
+This is pretty slow, but we're sure not to lose any messages. If you need more performance you can do the following:
+ * Have more kafka workers. They will load balance the channel.
+ * Increase the batch timeout. This will make to writer block some more but, it'll batch the writes, lessening the load 
+   on Kafka. Not sure how well this works across multiple goroutines, though.
+
 ### Todo: Tls against Kafka
 
 We don't need this ourselves, but PRs are welcome. Should be too hard. #goodfirsttask
@@ -81,7 +96,3 @@ Depending on configuration the bridge will either reject the message or warn of 
 Perhaps this could be done as simply as setting MQTT_TOPIC to several strings separated by , og ; or similar. We don't
 need this ourselves, but PRs are welcome. Should be too hard. #goodfirsttask
 
-### Todo: Performance
-
-I've not given this much thought. We might want to write in batches, utilize a worker pool or add a few other tricks
-to achieve reasonable performance.

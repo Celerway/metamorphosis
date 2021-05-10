@@ -18,6 +18,7 @@ type BridgeParams struct {
 	KafkaPort          int
 	KafkaTopic         string
 	KafkaWorkers       int
+	HealthPort         int
 }
 
 type bridge struct {

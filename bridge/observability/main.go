@@ -23,8 +23,9 @@ func (obs observability) mainloop() {
 
 func Run(params ObservabilityParams) *observability {
 	obs := observability{
-		channel: params.Channel,
-		logger:  log.WithFields(log.Fields{"module": "observability"}),
+		channel:    params.Channel,
+		logger:     log.WithFields(log.Fields{"module": "observability"}),
+		healthPort: params.HealthPort,
 	}
 
 	obs.mqttReceived = promauto.NewCounter(prometheus.CounterOpts{
@@ -53,7 +54,7 @@ func (obs *observability) httpStuff() {
 	router := mux.NewRouter().StrictSlash(true)
 	router.Handle("/metrics", promhttp.Handler())
 	router.HandleFunc("/healthz", obs.SillyHealthzHandler)
-	listenPort := ":8080"
+	listenPort := fmt.Sprintf(":%d", obs.healthPort)
 	obs.logger.Infof("Observability service attempting to listen to port %s", listenPort)
 	obs.logger.Fatal(http.ListenAndServe(fmt.Sprintf("%s", listenPort), router))
 }

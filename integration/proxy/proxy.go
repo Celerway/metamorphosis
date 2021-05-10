@@ -1,33 +1,28 @@
-package main
+package proxy
 
 // Simple proxy between MQTT/Kafka and metamorphosis
 // Used for integration testing.
 
 import (
-	"flag"
+	"context"
 	"fmt"
+	log "github.com/sirupsen/logrus"
 	"io"
 	"net"
 )
 
-func main() {
+func StartProxy(ctx context.Context, myMqttPort, myKafkaPort int, logger *log.Entry) {
 	const mqttPort = 1883
 	const kafkaPort = 9092
-	var (
-		myMqttPort  int = mqttPort + 10000
-		myKafkaPort int = kafkaPort + 10000
-	)
-
-	flag.IntVar(&myMqttPort, "mqtt-port", myMqttPort, "MQTT port")
-	flag.IntVar(&myKafkaPort, "kafka-port", myKafkaPort, "Kafka port")
-	flag.Parse()
-	go proxy(myMqttPort, mqttPort)
-	go proxy(myKafkaPort, kafkaPort)
-	select {} // block forever.
+	go proxy(myMqttPort, mqttPort, logger)
+	go proxy(myKafkaPort, kafkaPort, logger)
+	select {
+	case <-ctx.Done():
+	}
 }
 
-func proxy(src, dst int) {
-
+func proxy(src, dst int, logger *log.Entry) {
+	logger.Infof("Setting up a proxy from port %d --> %d", src, dst)
 	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", src))
 	if err != nil {
 		panic(err)
@@ -35,13 +30,13 @@ func proxy(src, dst int) {
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			fmt.Println("error accepting connection", err)
+			logger.Error("error accepting connection", err)
 			continue
 		}
 		go func() {
 			conn2, err := net.Dial("tcp", fmt.Sprintf(":%d", dst))
 			if err != nil {
-				fmt.Println("error dialing remote addr", err)
+				logger.Error("error dialing remote addr", err)
 				return
 			}
 			go io.Copy(conn2, conn)

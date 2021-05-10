@@ -21,7 +21,8 @@ func (d StatusMessage) String() string {
 }
 
 type ObservabilityParams struct {
-	Channel ObservabilityChannel
+	Channel    ObservabilityChannel
+	HealthPort int
 }
 
 type observability struct {
@@ -32,4 +33,5 @@ type observability struct {
 	kafkaErrors  prometheus.Counter
 	logger       *log.Entry
 	ready        bool
+	healthPort   int
 }

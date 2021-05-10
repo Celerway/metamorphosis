@@ -7,8 +7,6 @@ import (
 	"github.com/celerway/metamorphosis/bridge/observability"
 	gokafka "github.com/segmentio/kafka-go"
 	log "github.com/sirupsen/logrus"
-	"os"
-	"strconv"
 	"time"
 )
 
@@ -28,7 +26,7 @@ func Run(ctx context.Context, params KafkaParams, id int) {
 			"worker": fmt.Sprint(id),
 		}),
 	}
-	client.writer = getWriter(client.logger) // Give the writer the context aware logger and store it in the struct.
+	client.writer = getWriter(client) // Give the writer the context aware logger and store it in the struct.
 
 	// Sends a test message to Kafka. This will block Run so when Run returns we
 	// know we're OK.
@@ -102,34 +100,28 @@ func despool(ctx context.Context, buffer []KafkaMessage, client kafkaClient) ([]
 
 	return buffer, failed
 }
-func getInt(s string, logger *log.Entry) int {
-	val, err := strconv.Atoi(s)
-	if err != nil {
-		logger.Errorf("getInt failed on %s: %s", s, err)
-	}
-	return val
-}
 
 // This creates a write struct. Used when initializing.
-func getWriter(logger *log.Entry) *gokafka.Writer {
+func getWriter(client kafkaClient) *gokafka.Writer {
 	broker := fmt.Sprintf("%s:%d",
-		os.Getenv("KAFKA_BROKER"), getInt(os.Getenv("KAFKA_PORT"), logger))
+		client.broker, client.port)
 	w := &gokafka.Writer{
 		Addr:         gokafka.TCP(broker),
-		Topic:        os.Getenv("KAFKA_TOPIC"),
+		Topic:        client.topic,
 		Balancer:     &gokafka.LeastBytes{},
 		BatchTimeout: 10 * time.Millisecond, // Only give the client 10ms to batch up writes.
 	}
+	log.Debug("Created a Kafka writer on %s/%s", broker, client.topic)
 	return w
 }
 
 // The handler that gets called when we get a message.
 func handleMessageWrite(ctx context.Context, msg KafkaMessage, client kafkaClient) bool {
 	startWriteTime := time.Now()
-	client.logger.Trace("Issuing write to kafka (mqtt topic: %s)", msg.Topic)
+	client.logger.Tracef("Issuing write to kafka (mqtt topic: %s)", msg.Topic)
 	msgJson, err := json.Marshal(msg)
 	if err != nil {
-		client.logger.Error("Could not marshal message %v: %s", msg, err)
+		client.logger.Errorf("Could not marshal message %v: %s", msg, err)
 		// Guess there isn't much we can do at this point but to move on.
 		client.obsChannel <- observability.KafkaError
 		return true // We ignore these errors. No sense in re-trying.

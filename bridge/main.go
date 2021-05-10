@@ -20,7 +20,7 @@ import (
 
 func Run(ctx context.Context, params BridgeParams) {
 	var wg sync.WaitGroup
-
+	var tlsConfig *tls.Config
 	// In order to avoid hanging when we shut down we shutdown things in a certain order. So we use two contexts
 	// to do this.
 	mqttCtx, mqttCancel := context.WithCancel(ctx)   // Mqtt client. Shutdown first.
@@ -33,8 +33,9 @@ func Run(ctx context.Context, params BridgeParams) {
 		kafkaCh: make(kafka.MessageChannel, 0), // However, this could hide potential dead locks.
 		logger:  log.WithFields(log.Fields{"module": "bridge"}),
 	}
-	tlsConfig := NewTlsConfig(params.TlsRootCrtFile, params.MqttClientCertFile, params.MqttClientKeyFile, br.logger)
-
+	if params.MqttTls {
+		tlsConfig = NewTlsConfig(params.TlsRootCrtFile, params.MqttClientCertFile, params.MqttClientKeyFile, br.logger)
+	}
 	mqttParams := mqtt.MqttParams{
 		TlsConfig:  tlsConfig,
 		Broker:     params.MqttBroker,
@@ -54,10 +55,10 @@ func Run(ctx context.Context, params BridgeParams) {
 		ObsChannel: obsChan,
 	}
 	obsParams := observability.ObservabilityParams{
-		Channel: obsChan,
+		Channel:    obsChan,
+		HealthPort: params.HealthPort,
 	}
 	// Start the goroutines that do the work.
-
 	obs := observability.Run(obsParams) // Fire up obs.
 	br.run()                            // Start the bridge so MQTT can send messages to Kafka.
 	for i := 1; i < params.KafkaWorkers+1; i++ {

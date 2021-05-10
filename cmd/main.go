@@ -82,6 +82,7 @@ func main() {
 		KafkaPort:          kafkaPort,
 		KafkaTopic:         kafkaTopic,
 		KafkaWorkers:       kafkaWorkers,
+		HealthPort:         healthPort,
 	}
 	log.Infof("Startup options: %v", runConfig)
 	log.Debug("Starting bridge")

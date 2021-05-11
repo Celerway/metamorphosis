@@ -61,7 +61,7 @@ func mainloop(ctx context.Context, client kafkaClient) {
 			}
 		case msg := <-client.ch: // Got a message from the bridge.
 			if alive {
-				success := client.writeHandler(ctx, msg, client) // Send msg.
+				success := client.writeHandler(ctx, client, msg) // Send msg.
 				if !success {                                    // Kafka failed. :-(
 					msgBuffer = append(msgBuffer, msg)
 					client.logger.Infof("Message spooled. Currently %d messages in the spool.", len(msgBuffer))
@@ -97,7 +97,7 @@ func despool(ctx context.Context, buffer []KafkaMessage, client kafkaClient) ([]
 	client.logger.Warnf("Will attempt de-spool %d messages", len(buffer))
 	for i, msg := range buffer {
 		client.logger.Debugf("Despooling trying to de-spool %d", i)
-		success := client.writeHandler(ctx, msg, client)
+		success := client.writeHandler(ctx, client, msg)
 		if success {
 			successes++
 			continue
@@ -125,30 +125,25 @@ func getWriter(client kafkaClient) *gokafka.Writer {
 		BatchSize:    1, // Write single messages.
 		MaxAttempts:  1,
 		RequiredAcks: gokafka.RequireAll,
-		// RequiredAcks: gokafka.RequireOne, // Todo: When I had this at the default, gokafka.RequireAll I would lose messages when kafka was unavailable.
-		ErrorLogger: client.logger,
+		ErrorLogger:  client.logger,
 	}
 	client.logger.Debugf("Created a Kafka writer on %s/%s", broker, client.topic)
 	return w
 }
 
 // The handler that gets called when we get a message.
-func handleMessageWrite(ctx context.Context, msg KafkaMessage, client kafkaClient) bool {
+func handleMessageWrite(ctx context.Context, client kafkaClient, msg KafkaMessage) bool {
 	startWriteTime := time.Now()
 	client.logger.Debugf("Issuing write to kafka (mqtt topic: %s)", msg.Topic)
 	msgJson, err := json.Marshal(msg)
 	if err != nil {
 		client.logger.Errorf("Could not marshal message %v: %s", msg, err)
-		// Guess there isn't much we can do at this point but to move on.
 		client.obsChannel <- observability.KafkaError
-		return true // We ignore these errors. No sense in re-trying.
+		return true // Guess there isn't much we can do at this point but to move on.
 	}
 	client.logger.Tracef("Kafka(%s): %s", msg.Topic, string(msgJson))
-	kMsg := gokafka.Message{
-		Value: msgJson}
+	kMsg := gokafka.Message{Value: msgJson}
 	err = client.writer.WriteMessages(ctx, kMsg)
-	// Todo: Handle this error specifically Kafka: Error while writing: context canceled
-	// If we're shutting down there is no point in doing anything else.
 	if err != nil {
 		client.obsChannel <- observability.KafkaError
 		client.logger.Errorf("Kafka: Error while writing: %s", err)
@@ -167,5 +162,5 @@ func sendTestMessage(ctx context.Context, client kafkaClient) bool {
 		Topic:   "test",
 		Content: []byte("Just a test"),
 	}
-	return handleMessageWrite(ctx, testMsg, client)
+	return handleMessageWrite(ctx, client, testMsg)
 }

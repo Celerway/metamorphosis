@@ -36,7 +36,7 @@ type kafkaClient struct {
 	topic         string
 	writer        *gokafka.Writer
 	obsChannel    observability.ObservabilityChannel
-	writeHandler  func(ctx context.Context, msg KafkaMessage, client kafkaClient) bool
+	writeHandler  func(ctx context.Context, client kafkaClient, msg KafkaMessage) bool
 	logger        *log.Entry
 	retryInterval time.Duration
 }

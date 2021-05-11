@@ -90,26 +90,13 @@ Six goroutines should be running at any point in time:
 
 For us the most important thing is reliability. So we do synchronous writes which block the writer. 
 This is pretty slow, but we're sure not to lose any messages. If you need more performance you can do the following:
- * Have more kafka workers. They will load balance the channel.
+ * Have more kafka workers. They will load balance the channel. Message ordering might make problems.
  * Increase the batch timeout. This will make to writer block some more but, it'll batch the writes, lessening the load 
    on Kafka. Not sure how well this works across multiple goroutines, though.
 
 ### Todo: Tls against Kafka
 
 We don't need this ourselves, but PRs are welcome. Should be too hard. #goodfirsttask
-
-### Todo: testing
-
-Testing will happen something like this.
-
-- generate some TLS certs and keys
-- spin up a minimal broker (mosquitto?)
-- spin up the bridge with a mock Kafka backend
-- issues some messages to the broker
-- restart the broker and see that it reconnect
-- inject some errors into the mocked kafka backend
-- verify that the bridge does what it is supposed to do
-
 
 ### Todo: Support for multiple subscriptions.
 

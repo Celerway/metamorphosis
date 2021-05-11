@@ -42,7 +42,7 @@ func mainloop(ctx context.Context, client kafkaClient) {
 	client.waitGroup.Add(1)
 	keepRunning := true
 	msgBuffer := make([]KafkaMessage, 0) // Buffer to store things if Kafka is causing issues.
-	var failed bool
+	alive := true
 	var lastAttempt time.Time
 	client.logger.Infof("Kafka writer running %s:%d, retry is %v", client.broker, client.port, client.retryInterval)
 	for keepRunning {
@@ -50,43 +50,36 @@ func mainloop(ctx context.Context, client kafkaClient) {
 		case <-ctx.Done():
 			client.logger.Info("Kafka writer shutting down")
 			keepRunning = false
-		case <-time.After(client.retryInterval):
-			// Automatically retry even if there are no new messages.
-			if failed {
+		case <-time.After(client.retryInterval): // Automatically retry even if there are no new messages.
+			if !alive {
 				success := sendTestMessage(ctx, client)
 				if success {
-					client.logger.Warn("Kafka has recovered")
-					failed = false
+					client.logger.Warnf("Kafka has recovered (retryInterval) Spool: %d", len(msgBuffer))
 					lastAttempt = time.Now()
-					msgBuffer, failed = despool(ctx, msgBuffer, client) // Actual de-spool here.
+					msgBuffer, alive = despool(ctx, msgBuffer, client) // Actual de-spool here.
 				}
 			}
-		case msg := <-client.ch:
-			if !failed { // We assume Kafka is up.
-				success := client.writeHandler(ctx, msg, client) // Send msg. Get back status.
-				if !success {
-					msgBuffer = append(msgBuffer, msg) // spool the message.
+		case msg := <-client.ch: // Got a message from the bridge.
+			if alive {
+				success := client.writeHandler(ctx, msg, client) // Send msg.
+				if !success {                                    // Kafka failed. :-(
+					msgBuffer = append(msgBuffer, msg)
 					client.logger.Infof("Message spooled. Currently %d messages in the spool.", len(msgBuffer))
-					failed = true
+					alive = false
 					lastAttempt = time.Now() // Time of last failure.
 				}
-			} else {
-				// Here we're in trouble. We assume Kafka is down. We retest every Xs until we get it working again.
+			} else { // alive == false here.
 				if time.Since(lastAttempt) < client.retryInterval { // Less than Xs since last try. Just spool the message.
-					msgBuffer = append(msgBuffer, msg)
-					// Todo: Should we limit the number of messages we can spool?
-					// Now the heap will just grow and grow until it ooms.
+					msgBuffer = append(msgBuffer, msg) // Todo: Should we limit the number of messages we can spool?
 					client.logger.Infof("Message spooled. Currently %d messages in the spool.", len(msgBuffer))
-				} else {
-					// more than Xs passed. Lets try a test message.
+				} else { // retryInterval passed. Lets try a test message.
 					success := sendTestMessage(ctx, client)
 					if success {
-						client.logger.Warn("Kafka has recovered")
-						failed = false
+						client.logger.Warnf("Kafka has recovered (on new message) Spool: %d", len(msgBuffer))
 						lastAttempt = time.Now()
-						msgBuffer, failed = despool(ctx, msgBuffer, client) // Actual de-spool here.
-					} else {
-						client.logger.Warn("Kafka is still down. Will retry soon")
+						msgBuffer, alive = despool(ctx, msgBuffer, client) // Actual de-spool here.
+					} else { // success == false
+						lastAttempt = time.Now()
 						msgBuffer = append(msgBuffer, msg)
 					}
 				}
@@ -97,26 +90,28 @@ func mainloop(ctx context.Context, client kafkaClient) {
 	client.waitGroup.Done()
 }
 
+// despool
+// Returns buffer, alive
 func despool(ctx context.Context, buffer []KafkaMessage, client kafkaClient) ([]KafkaMessage, bool) {
-	failed := false
-	client.logger.Debugf("Will attempt de-spool %d messages", len(buffer))
+	successes := 0
+	client.logger.Warnf("Will attempt de-spool %d messages", len(buffer))
 	for i, msg := range buffer {
 		client.logger.Debugf("Despooling trying to de-spool %d", i)
 		success := client.writeHandler(ctx, msg, client)
 		if success {
+			successes++
 			continue
 		}
-		client.logger.Errorf("Got an error while de-spooling. Leaving messges on the spool.")
+		client.logger.Errorf("Got an error while de-spooling. Succeeded with %d msgs. Rest is still spooled",
+			successes)
 		// Gosh darn it! Kafka is down again.
 		// i should point at the last successful message we sent.
-		// If we didn't send any it'll be 0.
-		buffer = buffer[i:]
-		failed = true
+		// If we didn't send any i will be 0 and we'll return the whole slice.
+		return buffer[i:], false
 	}
-	if !failed {
-		client.logger.Warn("Successfully de-spooled messages")
-	}
-	return buffer, failed
+	client.logger.Warnf("Successfully de-spooled %d messages", successes)
+	// Return an empty slice.
+	return []KafkaMessage{}, true
 }
 
 // This creates a write struct. Used when initializing.

@@ -16,9 +16,9 @@ client requests `/metrics`. We'll also answer /healthz, so you can have k8s poll
 
 Note that you need to make sure that the topic exists in Red Panda / Kafka or that auto creation of topics is enabled.
 
-Note that there are limited guarantees given. We try to keep messages ordered. However, during restart, k8s will 
-start a new instance of the daemon before the old one is shut down. During this short period you'll
-see messages duplicates. Make sure you'll handle these.
+Note that there are limited guarantees given. If you use more than one worker messages might be reordered as they don't 
+synchronize. Also, during restart, k8s will start a new instance of the daemon before the old one is shut down. 
+During this short period you'll see messages duplicates. Make sure you'll handle these.
 
 Also note that the bridge will issue messages in order to test that it can talk to Kafka. These will be given the MQTT
 topic "test". Ignore these messages in your consumer.

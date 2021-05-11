@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-const noOfMessages = 5
+const noOfMessages = 20
 const originMqttPort = 1883
 const originKafkaPort = 9093
 const defaultHealthPort = 8080
@@ -50,8 +50,9 @@ func TestMain(m *testing.M) {
 		mqttCancel()
 		fmt.Println("Stopping Kafka")
 		kafkaCancel()
-		os.Exit(ret)
 	}
+	os.Exit(ret)
+
 }
 
 func TestDummy(t *testing.T) {

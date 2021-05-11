@@ -52,7 +52,6 @@ func verifyObsdata(t *testing.T, port, mqttMessages, kafkaMessages, mqttErrors, 
 	}
 	verifyCounter(t, "mqtt_received", *mf["mqtt_received"].Metric[0].Counter.Value, mqttMessages)
 	verifyCounter(t, "kafka_sent", *mf["kafka_sent"].Metric[0].Counter.Value, kafkaMessages)
-
 	verifyCounter(t, "mqtt_errors", *mf["mqtt_errors"].Metric[0].Counter.Value, mqttErrors)
 	verifyCounter(t, "kafka_errors", *mf["kafka_errors"].Metric[0].Counter.Value, kafkaErrors)
 }
@@ -209,9 +208,9 @@ func publishMqttMessages(t *testing.T, topic string, noMessages, offset, port in
 		}
 		token := client.Publish(topic, 1, false, msg)
 		token.Wait()
-		log.Debugf("Published message %d on MQTT", i)
 		time.Sleep(100 * time.Millisecond)
 	}
+	fmt.Printf("Published %d messages on MQTT\n", noMessages)
 	client.Disconnect(0)
 }
 
@@ -229,11 +228,12 @@ func verifyKafkaMessages(t *testing.T, topic string, noOfMessages, port int) {
 		if err != nil {
 			t.Errorf("Verifying kafka message: %s", err)
 		}
-		log.Debugf("Verify valid: %v", valid)
 		if valid {
 			noOfValidMessages++
+			fmt.Printf("Message %d is valid\n", noOfValidMessages)
 		}
 	}
+	fmt.Printf("Verified %d messages from Kafka\n", noOfMessages)
 }
 
 func getKafkaReader(port int, topic string) *gokafka.Reader {

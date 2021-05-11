@@ -6,7 +6,6 @@ import (
 	"github.com/celerway/metamorphosis/bridge/observability"
 	paho "github.com/eclipse/paho.mqtt.golang"
 	log "github.com/sirupsen/logrus"
-	"os"
 	"time"
 )
 
@@ -17,7 +16,7 @@ func Run(ctx context.Context, params MqttParams) {
 		broker:     params.Broker,
 		port:       params.Port,
 		topic:      params.Topic,
-		clientId:   os.Getenv("HOSTNAME"),
+		clientId:   params.Clientid,
 		tls:        params.Tls,
 		ch:         params.Channel,
 		waitGroup:  params.WaitGroup,
@@ -35,6 +34,7 @@ func Run(ctx context.Context, params MqttParams) {
 	}
 	opts.SetClientID(client.clientId)
 	opts.SetConnectionLostHandler(client.handleDisconnect)
+	opts.SetOnConnectHandler(client.handleConnect)
 	pahoClient := paho.NewClient(opts)
 	client.paho = pahoClient
 	client.connect()   // blocks and aborts on failure.
@@ -53,7 +53,7 @@ func (client mqttClient) mainloop(ctx context.Context) {
 	// If we need to keep track of something we can wrap this in a loop
 	select {
 	case <-ctx.Done():
-		client.logger.Debug("MQTT client shutting down.")
+		client.logger.Info("MQTT client context is cancelled. Shutting down.")
 		// Todo: There seems to be a race condition in the Paho Mqtt library that
 		// we trigger here from time to time. So, lets try to disconnect cleanly.
 		client.unsubscribe()
@@ -78,6 +78,9 @@ func (client *mqttClient) connect() {
 	}
 	client.logger.Infof("Worker '%v' connected to MQTT %s:%d", client.clientId, client.broker, client.port)
 }
+func (client mqttClient) handleConnect(paho paho.Client) {
+	client.logger.Info("Connection to MQTT broker established")
+}
 
 func (client *mqttClient) handleDisconnect(_ paho.Client, err error) {
 	client.logger.Errorf("handleDisconnect invoked with error: %s", err)
@@ -97,7 +100,7 @@ func (client mqttClient) subscribe() {
 }
 
 func (client mqttClient) messageHandler(_ paho.Client, msg paho.Message) {
-	client.logger.Debugf("Got message on topic %s. Message: %s", msg.Topic(), string(msg.Payload()))
+	client.logger.Tracef("Got message on topic %s. Message: %s", msg.Topic(), string(msg.Payload()))
 	chMsg := MqttChannelMessage{
 		Topic:   msg.Topic(),
 		Content: msg.Payload(),

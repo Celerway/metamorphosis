@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"fmt"
 	"github.com/celerway/metamorphosis/bridge/kafka"
 	"github.com/celerway/metamorphosis/bridge/mqtt"
 	"github.com/celerway/metamorphosis/bridge/observability"
@@ -42,17 +43,19 @@ func Run(ctx context.Context, params BridgeParams) {
 		Port:       params.MqttPort,
 		Topic:      params.MqttTopic,
 		Tls:        params.MqttTls,
+		Clientid:   getMqttClientId(),
 		Channel:    br.mqttCh,
 		WaitGroup:  &wg,
 		ObsChannel: obsChan,
 	}
 	kafkaParams := kafka.KafkaParams{
-		Broker:     params.KafkaBroker,
-		Port:       params.KafkaPort,
-		Channel:    br.kafkaCh,
-		WaitGroup:  &wg,
-		Topic:      params.KafkaTopic,
-		ObsChannel: obsChan,
+		Broker:        params.KafkaBroker,
+		Port:          params.KafkaPort,
+		Channel:       br.kafkaCh,
+		WaitGroup:     &wg,
+		Topic:         params.KafkaTopic,
+		ObsChannel:    obsChan,
+		RetryInterval: params.KafkaRetryInterval,
 	}
 	obsParams := observability.ObservabilityParams{
 		Channel:    obsChan,
@@ -95,6 +98,10 @@ func Run(ctx context.Context, params BridgeParams) {
 	br.logger.Trace("Main goroutine waiting for bridge shutdown.")
 	wg.Wait()
 	br.logger.Infof("Program exiting. There are currently %d goroutines: ", runtime.NumGoroutine())
+}
+
+func getMqttClientId() string {
+	return fmt.Sprintf("metamorphosis-%d", os.Getpid())
 }
 
 func NewTlsConfig(caFile, clientCertFile, clientKeyFile string, logger *log.Entry) *tls.Config {

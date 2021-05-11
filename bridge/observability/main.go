@@ -60,7 +60,7 @@ func (obs *observability) httpStuff() {
 }
 
 func (obs observability) handleChannelMessage(msg StatusMessage) {
-	obs.logger.Debugf("Observability received %s", msg)
+	obs.logger.Tracef("Observability received %s", msg)
 
 	switch msg {
 	case MqttRecieved:

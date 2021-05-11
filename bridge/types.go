@@ -4,6 +4,7 @@ import (
 	"github.com/celerway/metamorphosis/bridge/kafka"
 	"github.com/celerway/metamorphosis/bridge/mqtt"
 	log "github.com/sirupsen/logrus"
+	"time"
 )
 
 type BridgeParams struct {
@@ -19,6 +20,7 @@ type BridgeParams struct {
 	KafkaTopic         string
 	KafkaWorkers       int
 	HealthPort         int
+	KafkaRetryInterval time.Duration
 }
 
 type bridge struct {

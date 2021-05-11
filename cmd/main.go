@@ -9,6 +9,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 func main() {
@@ -82,6 +83,7 @@ func main() {
 		KafkaPort:          kafkaPort,
 		KafkaTopic:         kafkaTopic,
 		KafkaWorkers:       kafkaWorkers,
+		KafkaRetryInterval: 3 * time.Second,
 		HealthPort:         healthPort,
 	}
 	log.Infof("Startup options: %v", runConfig)

@@ -14,13 +14,14 @@ import (
 func Run(ctx context.Context, params KafkaParams, id int) {
 	// This should be fairly easy to test in case we wanna mock Kafka.
 	client := kafkaClient{
-		broker:       params.Broker,
-		port:         params.Port,
-		ch:           params.Channel,
-		waitGroup:    params.WaitGroup,
-		topic:        params.Topic,
-		obsChannel:   params.ObsChannel,
-		writeHandler: handleMessageWrite,
+		broker:        params.Broker,
+		port:          params.Port,
+		ch:            params.Channel,
+		waitGroup:     params.WaitGroup,
+		topic:         params.Topic,
+		obsChannel:    params.ObsChannel,
+		writeHandler:  handleMessageWrite,
+		retryInterval: params.RetryInterval,
 		logger: log.WithFields(log.Fields{
 			"module": "kafka",
 			"worker": fmt.Sprint(id),
@@ -58,14 +59,14 @@ func mainloop(ctx context.Context, client kafkaClient) {
 					lastAttempt = time.Now() // Time of last failure.
 				}
 			} else {
-				// Here we're in trouble. We assume Kafka is down. We retest every 10s until we get it working again.
-				if time.Since(lastAttempt) < 10*time.Second { // Less than 10s since last try. Just spool the message.
+				// Here we're in trouble. We assume Kafka is down. We retest every Xs until we get it working again.
+				if time.Since(lastAttempt) < client.retryInterval { // Less than Xs since last try. Just spool the message.
 					msgBuffer = append(msgBuffer, msg)
 					// Todo: Should we limit the number of messages we can spool?
 					// Now the heap will just grow and grow until it ooms.
 					client.logger.Infof("Message spooled. Currently %d messages in the spool.", len(msgBuffer))
 				} else {
-					// more than 10s passed. Lets try a test message.
+					// more than Xs passed. Lets try a test message.
 					success := sendTestMessage(ctx, client)
 					if success {
 						client.logger.Info("Kafka has recovered")
@@ -106,12 +107,13 @@ func getWriter(client kafkaClient) *gokafka.Writer {
 	broker := fmt.Sprintf("%s:%d",
 		client.broker, client.port)
 	w := &gokafka.Writer{
-		Addr:         gokafka.TCP(broker),
-		Topic:        client.topic,
-		Balancer:     &gokafka.LeastBytes{},
+		Addr:     gokafka.TCP(broker),
+		Topic:    client.topic,
+		Balancer: &gokafka.LeastBytes{},
+		// Todo: Figure out the right value here.
 		BatchTimeout: 10 * time.Millisecond, // Only give the client 10ms to batch up writes.
 	}
-	log.Debug("Created a Kafka writer on %s/%s", broker, client.topic)
+	log.Debugf("Created a Kafka writer on %s/%s", broker, client.topic)
 	return w
 }
 
@@ -139,7 +141,7 @@ func handleMessageWrite(ctx context.Context, msg KafkaMessage, client kafkaClien
 	} else {
 		client.obsChannel <- observability.KafkaSent
 	}
-	client.logger.Debugf("Write done. Took %v", time.Since(startWriteTime))
+	client.logger.Tracef("Write done. Took %v", time.Since(startWriteTime))
 	return true
 }
 

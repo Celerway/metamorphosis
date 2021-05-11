@@ -90,9 +90,11 @@ Six goroutines should be running at any point in time:
 
 For us the most important thing is reliability. So we do synchronous writes which block the writer. 
 This is pretty slow, but we're sure not to lose any messages. If you need more performance you can do the following:
- * Have more kafka workers. They will load balance the channel. Message ordering might make problems.
- * Increase the batch timeout. This will make to writer block some more but, it'll batch the writes, lessening the load 
-   on Kafka. Not sure how well this works across multiple goroutines, though.
+ * Have more kafka workers. They will load balance the channel. Message ordering might make problems. In order to 
+   counter this we could have some more intelligent load balancing which will hash the MQTT topics onto a set of 
+   workers instead of round-robin.
+ * Write in batches. The client can be pretty smart about this, and I think we can retain our ability to spool
+   messages for as long as we need.
 
 ### Todo: Tls against Kafka
 

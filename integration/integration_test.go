@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	_ "github.com/Shopify/toxiproxy/client"
 	toxiproxy "github.com/Shopify/toxiproxy/client"
 	"github.com/celerway/metamorphosis/bridge"
 	log "github.com/sirupsen/logrus"
@@ -13,9 +12,9 @@ import (
 	"time"
 )
 
-const noOfMessages = 20
+const noOfMessages = 5
 const originMqttPort = 1883
-const originKafkaPort = 9092
+const originKafkaPort = 9093
 const defaultHealthPort = 8080
 const toxiPort = 8474
 const startServices = false
@@ -26,7 +25,14 @@ func TestMain(m *testing.M) {
 		rootCtx, mqttCtx, kafkaCtx context.Context
 		mqttCancel, kafkaCancel    context.CancelFunc
 	)
-	log.SetLevel(log.DebugLevel)
+	log.SetLevel(log.InfoLevel)
+	f := log.TextFormatter{
+		ForceColors:     true,
+		FullTimestamp:   true,
+		TimestampFormat: time.RFC3339Nano,
+	}
+
+	log.SetFormatter(&f)
 	log.Debug("Set log level")
 	if startServices {
 		rootCtx = context.Background()
@@ -71,8 +77,8 @@ func TestBasic(t *testing.T) {
 	bridgeCtx, bridgeCancel := context.WithCancel(rootCtx)
 	go bridge.Run(bridgeCtx, makeConfig(originMqttPort, originKafkaPort, defaultHealthPort, rTopic))
 	waitForBridge(t, logger, defaultHealthPort)
-	publishMqttMessages(t, rTopic, noOfMessages, originMqttPort)  // Publish messages
-	verifyKafkaMessages(t, rTopic, noOfMessages, originKafkaPort) // Verify the messages.
+	publishMqttMessages(t, rTopic, noOfMessages, 0, originMqttPort) // Publish messages
+	verifyKafkaMessages(t, rTopic, noOfMessages, originKafkaPort)   // Verify the messages.
 	// +1 for the kafka messages. (There is a test message, you know)
 	verifyObsdata(t, defaultHealthPort, noOfMessages, noOfMessages+1, 0, 0)
 	bridgeCancel()
@@ -100,7 +106,7 @@ func TestBasicWithProxy(t *testing.T) {
 
 	kafkaPort := getRandomPort()
 	toxi := toxiproxy.NewClient(fmt.Sprintf("localhost:%d", toxiPort))
-
+	deleteProxies(toxi) // Todo: This should be removed when tests are solid.
 	proxy, err := toxi.CreateProxy("kafka",
 		fmt.Sprintf("localhost:%d", kafkaPort),
 		fmt.Sprintf("localhost:%d", originKafkaPort))
@@ -115,8 +121,8 @@ func TestBasicWithProxy(t *testing.T) {
 	bridgeCtx, bridgeCancel := context.WithCancel(rootCtx)
 	go bridge.Run(bridgeCtx, makeConfig(originMqttPort, kafkaPort, defaultHealthPort, rTopic))
 	waitForBridge(t, logger, defaultHealthPort)
-	publishMqttMessages(t, rTopic, noOfMessages, originMqttPort)  // Publish messages
-	verifyKafkaMessages(t, rTopic, noOfMessages, originKafkaPort) // Verify the messages.
+	publishMqttMessages(t, rTopic, noOfMessages, 0, originMqttPort) // Publish messages
+	verifyKafkaMessages(t, rTopic, noOfMessages, originKafkaPort)   // Verify the messages.
 	// +1 for the kafka messages. (There is a test message, you know)
 	verifyObsdata(t, defaultHealthPort, noOfMessages, noOfMessages+1, 0, 0)
 	bridgeCancel()
@@ -126,12 +132,12 @@ func TestBasicWithProxy(t *testing.T) {
 func TestKafkaFailure(t *testing.T) {
 	logger := log.WithFields(log.Fields{"test": "TestBasic"})
 
-	kafkaPort := getRandomPort()
+	// kafkaPort := getRandomPort()
+	kafkaPort := 9092
 	toxi := toxiproxy.NewClient(fmt.Sprintf("localhost:%d", toxiPort))
 	deleteProxies(toxi)
-	proxy, err := toxi.CreateProxy("kafka",
-		fmt.Sprintf("localhost:%d", kafkaPort),
-		fmt.Sprintf("localhost:%d", originKafkaPort))
+	// proxy, err := toxi.CreateProxy("kafka",fmt.Sprintf("localhost:%d", kafkaPort),fmt.Sprintf("localhost:%d", originKafkaPort))
+	proxy, err := toxi.CreateProxy("kafka", fmt.Sprintf("localhost:%d", kafkaPort), fmt.Sprintf("localhost:%d", originKafkaPort))
 	defer proxy.Delete()
 	if err != nil {
 		panic(err)
@@ -143,16 +149,21 @@ func TestKafkaFailure(t *testing.T) {
 	bridgeCtx, bridgeCancel := context.WithCancel(rootCtx)
 	go bridge.Run(bridgeCtx, makeConfig(originMqttPort, kafkaPort, defaultHealthPort, rTopic))
 	waitForBridge(t, logger, defaultHealthPort)
-	publishMqttMessages(t, rTopic, noOfMessages, originMqttPort) // Publish messages
-	time.Sleep(1 * time.Second)                                  // Give kafka time to write stuff.
+	publishMqttMessages(t, rTopic, noOfMessages, 0, originMqttPort) // Publish messages
+	time.Sleep(1 * time.Second)                                     // Give kafka time to write stuff.
 	proxy.Disable()
-	// New batch of messages. Now kafka should be dead.
-	publishMqttMessages(t, rTopic, noOfMessages, originMqttPort) // Publish messages
+	fmt.Println("==== Kafka DISABLED === ")
 	time.Sleep(1 * time.Second)
+	// New batch of messages. Now kafka should be dead. note the offset.
+	publishMqttMessages(t, rTopic, noOfMessages, noOfMessages, originMqttPort) // Publish messages
+	time.Sleep(3 * time.Second)
 	proxy.Enable()
-	time.Sleep(5 * time.Second)                                       // Give Kafka time to recover.
-	verifyKafkaMessages(t, rTopic, noOfMessages*2+2, originKafkaPort) // Verify the messages.
-	verifyObsdata(t, defaultHealthPort, noOfMessages, noOfMessages+1, 0, 0)
+	fmt.Println("==== Kafka ENABLED === ")
+
+	time.Sleep(3 * time.Second)                                     // Give Kafka time to recover.
+	verifyKafkaMessages(t, rTopic, noOfMessages*2, originKafkaPort) // Verify the messages.
+	fmt.Println("Done verifying kafka data. Checking obs data.")
+	verifyObsdata(t, defaultHealthPort, noOfMessages*2, noOfMessages*2+2, 0, 2)
 	bridgeCancel()
 	kafkaTopic(t, "delete", rTopic)
 

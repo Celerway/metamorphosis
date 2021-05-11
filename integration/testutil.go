@@ -14,6 +14,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"math/rand"
 	"net/http"
+	"os"
 	"os/exec"
 	"testing"
 	"time"
@@ -22,7 +23,10 @@ import (
 func deleteProxies(client *toxiproxy.Client) {
 	proxies, _ := client.Proxies()
 	for _, proxy := range proxies {
-		proxy.Delete()
+		err := proxy.Delete()
+		if err != nil {
+			panic(err)
+		}
 	}
 
 }
@@ -64,7 +68,7 @@ func makeConfig(mqttPort, kafkaPort, healthPort int, topic string) bridge.Bridge
 		KafkaTopic:         topic,
 		KafkaWorkers:       1,
 		HealthPort:         healthPort,
-		KafkaRetryInterval: 2 * time.Second,
+		KafkaRetryInterval: 3 * time.Second,
 	}
 
 }
@@ -138,7 +142,7 @@ func getMqttClient(port int) mqtt.Client {
 	var broker = "localhost"
 	opts := mqtt.NewClientOptions()
 	opts.AddBroker(fmt.Sprintf("tcp://%s:%d", broker, port))
-	opts.SetClientID("go_mqtt_client")
+	opts.SetClientID("go_mqtt_client-" + fmt.Sprint(os.Getpid()))
 	client := mqtt.NewClient(opts)
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
 		panic(token.Error())
@@ -160,7 +164,7 @@ func makeMessage(id int) ([]byte, error) {
 // takes a raw message we got from Kafka and
 // verify the content.
 // fuck this. this is a bit on the complex side.
-func verifyMessage(i int, m gokafka.Message, topic string) error {
+func verifyMessage(i int, m gokafka.Message, topic string) (bool, error) {
 	var kmsg KMessage // Kafka message.
 	var actualMessage Message
 	if m.Topic != topic {
@@ -169,49 +173,65 @@ func verifyMessage(i int, m gokafka.Message, topic string) error {
 	// unmarshal the message from Kafka.
 	err := json.Unmarshal(m.Value, &kmsg)
 	if err != nil {
-		return fmt.Errorf("kafka message json unmarshal: %s", err)
+		return false, fmt.Errorf("kafka message json unmarshal: %s", err)
 	}
+	if kmsg.Topic == "test" {
+		// test message. Ignore.
+		fmt.Println("Verify saw a test message. Marking as invalid without errors.")
+		return false, nil
+	}
+
 	// get the mqtt message. It is now in kmsg.Content
 	err = json.Unmarshal(kmsg.Content, &actualMessage)
 	if err != nil {
-		return fmt.Errorf("mqtt message json unmarshal: %s", err)
+		return false, fmt.Errorf("mqtt message json unmarshal: %s", err)
 	}
 
 	// Now check the inner message for content.
 	if actualMessage.Id != i {
-		return fmt.Errorf("kafka message has wrong ID, got %d, expected %d", actualMessage.Id, i)
+		return false, fmt.Errorf("kafka message has wrong ID, got %d, expected %d", actualMessage.Id, i)
 	}
 	msgChecksum := sha256.Sum256([]byte(actualMessage.RandomString))
 
 	if msgChecksum != actualMessage.Checksum {
-		return fmt.Errorf("Message checksum mismatch, got %s expected %s", msgChecksum, actualMessage.Checksum)
+		return false, fmt.Errorf("Message checksum mismatch, got %s expected %s", msgChecksum, actualMessage.Checksum)
 	}
-	return nil
+	return true, nil
 }
 
-func publishMqttMessages(t *testing.T, topic string, noMessages, port int) {
+// connects to the MQTT broker, publishes a batch of messages (blocking), then disconnects.
+func publishMqttMessages(t *testing.T, topic string, noMessages, offset, port int) {
 	client := getMqttClient(port)
-	for i := 0; i < noMessages; i++ {
+	for i := offset; i < noMessages+offset; i++ {
 		msg, err := makeMessage(i)
 		if err != nil {
 			t.Errorf("While making message: %s", err)
 		}
-		client.Publish(topic, 1, false, msg)
-		log.Tracef("Published message %d on MQTT", i)
+		token := client.Publish(topic, 1, false, msg)
+		token.Wait()
+		log.Debugf("Published message %d on MQTT", i)
+		time.Sleep(100 * time.Millisecond)
 	}
+	client.Disconnect(0)
 }
 
-func verifyKafkaMessages(t *testing.T, topic string, noMessages, port int) {
+func verifyKafkaMessages(t *testing.T, topic string, noOfMessages, port int) {
 	client := getKafkaReader(port, topic)
-	for i := 0; i < noMessages; i++ {
-		log.Debugf("kafka: reading message %d", i)
+	noOfValidMessages := 0
+
+	for noOfValidMessages < noOfMessages {
+		log.Debugf("kafka: reading message %d", noOfValidMessages)
 		msg, err := client.ReadMessage(context.Background())
 		if err != nil {
 			t.Errorf("Reading kafka message: %s", err)
 		}
-		err = verifyMessage(i, msg, topic)
+		valid, err := verifyMessage(noOfValidMessages, msg, topic)
 		if err != nil {
 			t.Errorf("Verifying kafka message: %s", err)
+		}
+		log.Debugf("Verify valid: %v", valid)
+		if valid {
+			noOfValidMessages++
 		}
 	}
 }

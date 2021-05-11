@@ -30,8 +30,8 @@ func Run(ctx context.Context, params BridgeParams) {
 	obsChan := observability.GetChannel()
 
 	br := bridge{
-		mqttCh:  make(mqtt.MessageChannel, 0),  // For pure performance these should be buffered
-		kafkaCh: make(kafka.MessageChannel, 0), // However, this could hide potential dead locks.
+		mqttCh:  make(mqtt.MessageChannel, 100),  // For pure performance these should be buffered
+		kafkaCh: make(kafka.MessageChannel, 100), // However, this could hide potential dead locks.
 		logger:  log.WithFields(log.Fields{"module": "bridge"}),
 	}
 	if params.MqttTls {

@@ -44,17 +44,29 @@ func mainloop(ctx context.Context, client kafkaClient) {
 	msgBuffer := make([]KafkaMessage, 0) // Buffer to store things if Kafka is causing issues.
 	var failed bool
 	var lastAttempt time.Time
-	client.logger.Infof("Kafka writer running %s:%d", client.broker, client.port)
+	client.logger.Infof("Kafka writer running %s:%d, retry is %v", client.broker, client.port, client.retryInterval)
 	for keepRunning {
 		select {
 		case <-ctx.Done():
 			client.logger.Info("Kafka writer shutting down")
 			keepRunning = false
+		case <-time.After(client.retryInterval):
+			// Automatically retry even if there are no new messages.
+			if failed {
+				success := sendTestMessage(ctx, client)
+				if success {
+					client.logger.Warn("Kafka has recovered")
+					failed = false
+					lastAttempt = time.Now()
+					msgBuffer, failed = despool(ctx, msgBuffer, client) // Actual de-spool here.
+				}
+			}
 		case msg := <-client.ch:
 			if !failed { // We assume Kafka is up.
 				success := client.writeHandler(ctx, msg, client) // Send msg. Get back status.
 				if !success {
 					msgBuffer = append(msgBuffer, msg) // spool the message.
+					client.logger.Infof("Message spooled. Currently %d messages in the spool.", len(msgBuffer))
 					failed = true
 					lastAttempt = time.Now() // Time of last failure.
 				}
@@ -69,12 +81,12 @@ func mainloop(ctx context.Context, client kafkaClient) {
 					// more than Xs passed. Lets try a test message.
 					success := sendTestMessage(ctx, client)
 					if success {
-						client.logger.Info("Kafka has recovered")
+						client.logger.Warn("Kafka has recovered")
 						failed = false
 						lastAttempt = time.Now()
 						msgBuffer, failed = despool(ctx, msgBuffer, client) // Actual de-spool here.
 					} else {
-						client.logger.Warn("Kafka is still down. Will retry in 10s")
+						client.logger.Warn("Kafka is still down. Will retry soon")
 						msgBuffer = append(msgBuffer, msg)
 					}
 				}
@@ -87,18 +99,23 @@ func mainloop(ctx context.Context, client kafkaClient) {
 
 func despool(ctx context.Context, buffer []KafkaMessage, client kafkaClient) ([]KafkaMessage, bool) {
 	failed := false
+	client.logger.Debugf("Will attempt de-spool %d messages", len(buffer))
 	for i, msg := range buffer {
+		client.logger.Debugf("Despooling trying to de-spool %d", i)
 		success := client.writeHandler(ctx, msg, client)
 		if success {
 			continue
 		}
+		client.logger.Errorf("Got an error while de-spooling. Leaving messges on the spool.")
 		// Gosh darn it! Kafka is down again.
 		// i should point at the last successful message we sent.
 		// If we didn't send any it'll be 0.
 		buffer = buffer[i:]
 		failed = true
 	}
-
+	if !failed {
+		client.logger.Warn("Successfully de-spooled messages")
+	}
 	return buffer, failed
 }
 
@@ -107,11 +124,14 @@ func getWriter(client kafkaClient) *gokafka.Writer {
 	broker := fmt.Sprintf("%s:%d",
 		client.broker, client.port)
 	w := &gokafka.Writer{
-		Addr:     gokafka.TCP(broker),
-		Topic:    client.topic,
-		Balancer: &gokafka.LeastBytes{},
+		Addr:         gokafka.TCP(broker),
+		Topic:        client.topic,
+		Balancer:     &gokafka.LeastBytes{},
+		BatchSize:    1, // Write single messages.
+		MaxAttempts:  1,
+		RequiredAcks: gokafka.RequireOne, // Todo: When I had this at the default, gokafka.RequireAll I would lose messages when kafka was unavailable.
 		// Todo: Figure out the right value here.
-		BatchTimeout: 10 * time.Millisecond, // Only give the client 10ms to batch up writes.
+		// WriteTimeout: 100 * time.Millisecond, // Todo: handle this properly. Remember that this needs to be testable.
 	}
 	log.Debugf("Created a Kafka writer on %s/%s", broker, client.topic)
 	return w
@@ -120,7 +140,7 @@ func getWriter(client kafkaClient) *gokafka.Writer {
 // The handler that gets called when we get a message.
 func handleMessageWrite(ctx context.Context, msg KafkaMessage, client kafkaClient) bool {
 	startWriteTime := time.Now()
-	client.logger.Tracef("Issuing write to kafka (mqtt topic: %s)", msg.Topic)
+	client.logger.Debugf("Issuing write to kafka (mqtt topic: %s)", msg.Topic)
 	msgJson, err := json.Marshal(msg)
 	if err != nil {
 		client.logger.Errorf("Could not marshal message %v: %s", msg, err)
@@ -128,7 +148,7 @@ func handleMessageWrite(ctx context.Context, msg KafkaMessage, client kafkaClien
 		client.obsChannel <- observability.KafkaError
 		return true // We ignore these errors. No sense in re-trying.
 	}
-	client.logger.Tracef("Kafka(%s): %s", client.topic, string(msgJson))
+	client.logger.Tracef("Kafka(%s): %s", msg.Topic, string(msgJson))
 	kMsg := gokafka.Message{
 		Value: msgJson}
 	err = client.writer.WriteMessages(ctx, kMsg)
@@ -141,7 +161,7 @@ func handleMessageWrite(ctx context.Context, msg KafkaMessage, client kafkaClien
 	} else {
 		client.obsChannel <- observability.KafkaSent
 	}
-	client.logger.Tracef("Write done. Took %v", time.Since(startWriteTime))
+	client.logger.Debugf("Write done(topic %s). Took %v", msg.Topic, time.Since(startWriteTime))
 	return true
 }
 

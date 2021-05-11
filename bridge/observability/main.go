@@ -53,7 +53,7 @@ func (obs *observability) httpStuff() {
 	// We don't care about waitGroups and stuff here. We can be aborted at any time.
 	router := mux.NewRouter().StrictSlash(true)
 	router.Handle("/metrics", promhttp.Handler())
-	router.HandleFunc("/healthz", obs.SillyHealthzHandler)
+	router.HandleFunc("/healthz", obs.HealthzHandler)
 	listenPort := fmt.Sprintf(":%d", obs.healthPort)
 	obs.logger.Infof("Observability service attempting to listen to port %s", listenPort)
 	obs.logger.Fatal(http.ListenAndServe(fmt.Sprintf("%s", listenPort), router))
@@ -77,10 +77,10 @@ func (obs observability) handleChannelMessage(msg StatusMessage) {
 }
 
 func GetChannel() ObservabilityChannel {
-	return make(ObservabilityChannel, 0) // Todo: Consider buffering this when we're sure we don't deadlock.
+	return make(ObservabilityChannel, 100) // Todo: Consider buffering this when we're sure we don't deadlock.
 }
 
-func (obs *observability) SillyHealthzHandler(w http.ResponseWriter, _ *http.Request) {
+func (obs *observability) HealthzHandler(w http.ResponseWriter, _ *http.Request) {
 	if obs.ready {
 		w.WriteHeader(200)
 		_, _ = w.Write([]byte("ok"))

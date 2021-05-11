@@ -129,11 +129,11 @@ func getWriter(client kafkaClient) *gokafka.Writer {
 		Balancer:     &gokafka.LeastBytes{},
 		BatchSize:    1, // Write single messages.
 		MaxAttempts:  1,
-		RequiredAcks: gokafka.RequireOne, // Todo: When I had this at the default, gokafka.RequireAll I would lose messages when kafka was unavailable.
-		// Todo: Figure out the right value here.
-		// WriteTimeout: 100 * time.Millisecond, // Todo: handle this properly. Remember that this needs to be testable.
+		RequiredAcks: gokafka.RequireAll,
+		// RequiredAcks: gokafka.RequireOne, // Todo: When I had this at the default, gokafka.RequireAll I would lose messages when kafka was unavailable.
+		ErrorLogger: client.logger,
 	}
-	log.Debugf("Created a Kafka writer on %s/%s", broker, client.topic)
+	client.logger.Debugf("Created a Kafka writer on %s/%s", broker, client.topic)
 	return w
 }
 

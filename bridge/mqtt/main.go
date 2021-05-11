@@ -54,8 +54,6 @@ func (client mqttClient) mainloop(ctx context.Context) {
 	select {
 	case <-ctx.Done():
 		client.logger.Info("MQTT client context is cancelled. Shutting down.")
-		// Todo: There seems to be a race condition in the Paho Mqtt library that
-		// we trigger here from time to time. So, lets try to disconnect cleanly.
 		client.unsubscribe()
 		time.Sleep(100 * time.Millisecond)
 		client.paho.Disconnect(100)
@@ -73,12 +71,12 @@ func (client *mqttClient) connect() {
 	token := client.paho.Connect()
 	if token.Wait() && token.Error() != nil {
 		client.logger.Fatalf("Could not connect to broker: %s", token.Error())
-		// Todo: wtf do we do here?
-		// Do we retry? Fail fatally and assume that k8s will restart the container?
+		// What do we do here? My suggestion is to fail the service (abort)
+		// and assume that k8s will restart the pod.
 	}
 	client.logger.Infof("Worker '%v' connected to MQTT %s:%d", client.clientId, client.broker, client.port)
 }
-func (client mqttClient) handleConnect(paho paho.Client) {
+func (client mqttClient) handleConnect(_ paho.Client) {
 	client.logger.Info("Connection to MQTT broker established")
 }
 

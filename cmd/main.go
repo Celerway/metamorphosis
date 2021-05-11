@@ -27,6 +27,7 @@ func main() {
 		kafkaTopic           string
 		healthPort           int = 8080
 		kafkaWorkers         int = 1
+		kafkaRetryInterval   int = 3
 	)
 
 	err := godotenv.Load()
@@ -59,6 +60,8 @@ func main() {
 		LookupEnvOrString("KAFKA_TOPIC", kafkaTopic), "Kafka topic to write to")
 	flag.IntVar(&kafkaWorkers, "kafka-workers",
 		LookupEnvOrInt("KAFKA_WORKERS", kafkaWorkers), "Kafka workers")
+	flag.IntVar(&kafkaRetryInterval, "kafka-retry-interval",
+		LookupEnvOrInt("KAFKA_RETRY_INTERVAL", kafkaRetryInterval), "Kafka retry interval (seconds)")
 	flag.IntVar(&healthPort, "health-port",
 		LookupEnvOrInt("HEALTH_PORT", healthPort), "HTTP port for healthz and prometheus")
 	flag.Parse()
@@ -83,7 +86,7 @@ func main() {
 		KafkaPort:          kafkaPort,
 		KafkaTopic:         kafkaTopic,
 		KafkaWorkers:       kafkaWorkers,
-		KafkaRetryInterval: 3 * time.Second,
+		KafkaRetryInterval: time.Duration(kafkaRetryInterval) * time.Second,
 		HealthPort:         healthPort,
 	}
 	log.Infof("Startup options: %v", runConfig)

@@ -76,8 +76,8 @@ func (obs observability) handleChannelMessage(msg StatusMessage) {
 	}
 }
 
-func GetChannel() ObservabilityChannel {
-	return make(ObservabilityChannel, 100) // Todo: Consider buffering this when we're sure we don't deadlock.
+func GetChannel(size int) ObservabilityChannel {
+	return make(ObservabilityChannel, size) //
 }
 
 func (obs *observability) HealthzHandler(w http.ResponseWriter, _ *http.Request) {

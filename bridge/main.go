@@ -19,6 +19,8 @@ import (
 	"time"
 )
 
+const channelSize = 100
+
 func Run(ctx context.Context, params BridgeParams) {
 	var wg sync.WaitGroup
 	var tlsConfig *tls.Config
@@ -27,11 +29,11 @@ func Run(ctx context.Context, params BridgeParams) {
 	mqttCtx, mqttCancel := context.WithCancel(ctx)   // Mqtt client. Shutdown first.
 	kafkaCtx, kafkaCancel := context.WithCancel(ctx) // Kafka, shutdown after mqtt.
 
-	obsChan := observability.GetChannel()
+	obsChan := observability.GetChannel(channelSize)
 
 	br := bridge{
-		mqttCh:  make(mqtt.MessageChannel, 100),  // For pure performance these should be buffered
-		kafkaCh: make(kafka.MessageChannel, 100), // However, this could hide potential dead locks.
+		mqttCh:  make(mqtt.MessageChannel, channelSize),
+		kafkaCh: make(kafka.MessageChannel, channelSize),
 		logger:  log.WithFields(log.Fields{"module": "bridge"}),
 	}
 	if params.MqttTls {

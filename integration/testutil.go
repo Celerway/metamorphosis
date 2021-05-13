@@ -1,12 +1,10 @@
-package main
+package integration
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	toxiproxy "github.com/Shopify/toxiproxy/client"
 	"github.com/celerway/metamorphosis/bridge"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/prometheus/common/expfmt"
@@ -15,21 +13,10 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
-	"os/exec"
+	"sync"
 	"testing"
 	"time"
 )
-
-func deleteProxies(client *toxiproxy.Client) {
-	proxies, _ := client.Proxies()
-	for _, proxy := range proxies {
-		err := proxy.Delete()
-		if err != nil {
-			panic(err)
-		}
-	}
-
-}
 
 func verifyCounter(t *testing.T, name string, value float64, exptected int) {
 	if int(value) != exptected {
@@ -56,7 +43,7 @@ func verifyObsdata(t *testing.T, port, mqttMessages, kafkaMessages, mqttErrors, 
 	verifyCounter(t, "kafka_errors", *mf["kafka_errors"].Metric[0].Counter.Value, kafkaErrors)
 }
 
-func makeConfig(mqttPort, kafkaPort, healthPort int, topic string) bridge.BridgeParams {
+func mkBrigeParam(wg *sync.WaitGroup, mqttPort, kafkaPort, healthPort int, topic string) bridge.BridgeParams {
 	return bridge.BridgeParams{
 		MqttBroker:         "localhost",
 		MqttPort:           mqttPort,
@@ -68,6 +55,7 @@ func makeConfig(mqttPort, kafkaPort, healthPort int, topic string) bridge.Bridge
 		KafkaWorkers:       1,
 		HealthPort:         healthPort,
 		KafkaRetryInterval: 3 * time.Second,
+		MainWaitGroup:      wg,
 	}
 
 }
@@ -89,27 +77,6 @@ func waitForBridge(t *testing.T, logger *log.Entry, port int) {
 	}
 	logger.Debug("Bridge OK.")
 }
-func startMqtt(ctx context.Context) {
-	go func() {
-		err := exec.CommandContext(ctx, "/usr/sbin/mosquitto").Run()
-		if err != nil {
-			fmt.Println("Error starting MQTT", err)
-		} else {
-			fmt.Println("MQTT started")
-		}
-	}()
-}
-
-func startKafka(ctx context.Context) {
-	go func() {
-		err := exec.CommandContext(ctx, "/usr/bin/rpk", "redpanda", "start")
-		if err != nil {
-			fmt.Println("Error starting MQTT", err)
-		} else {
-			fmt.Println("Kafka started")
-		}
-	}()
-}
 
 // Get a set of random ports for the proxy
 func getRandomPort() int {
@@ -123,18 +90,6 @@ func getRandomString(length int) string {
 		b[i] = letters[rand.Intn(len(letters))]
 	}
 	return string(b)
-}
-
-func kafkaTopic(t *testing.T, action, topic string) {
-	cmd := exec.Command("rpk", "topic", action, topic)
-	var stdout, stderr bytes.Buffer
-	log.Debugf("kafka topic(%s): %s", action, topic)
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := cmd.Run()
-	if err != nil {
-		t.Errorf("Kafka topic (%s) stdout: %s stderr: %s err: %s", action, stdout.String(), stderr.String(), err)
-	}
 }
 
 func getMqttClient(port int) mqtt.Client {
@@ -183,7 +138,7 @@ func verifyMessage(i int, m gokafka.Message, topic string) (bool, error) {
 	// get the mqtt message. It is now in kmsg.Content
 	err = json.Unmarshal(kmsg.Content, &actualMessage)
 	if err != nil {
-		return false, fmt.Errorf("mqtt message json unmarshal: %s", err)
+		return false, fmt.Errorf("mqtt message json unmarshal: %s (message: %s)", err, kmsg.Content)
 	}
 
 	// Now check the inner message for content.

@@ -3,6 +3,8 @@ package observability
 import (
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
+	"net/http"
+	"sync"
 )
 
 type ObservabilityChannel chan StatusMessage
@@ -23,6 +25,7 @@ func (d StatusMessage) String() string {
 type ObservabilityParams struct {
 	Channel    ObservabilityChannel
 	HealthPort int
+	WaitGroup  *sync.WaitGroup
 }
 
 type observability struct {
@@ -34,4 +37,7 @@ type observability struct {
 	logger       *log.Entry
 	ready        bool
 	healthPort   int
+	waitGroup    *sync.WaitGroup
+	srv          *http.Server
+	promReg      *prometheus.Registry
 }

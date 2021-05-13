@@ -1,55 +1,52 @@
-package main
+package integration
 
 import (
 	"context"
 	"fmt"
-	toxiproxy "github.com/Shopify/toxiproxy/client"
 	"github.com/celerway/metamorphosis/bridge"
+	"github.com/pingcap/failpoint"
 	log "github.com/sirupsen/logrus"
 	"math/rand"
 	"os"
+	"sync"
 	"testing"
 	"time"
 )
 
 const noOfMessages = 20
 const originMqttPort = 1883
-const originKafkaPort = 9093
+const originKafkaPort = 9092
 const defaultHealthPort = 8080
-const toxiPort = 8474
 const startServices = false
 
 func TestMain(m *testing.M) {
 	// Main setup goroutine
 	var (
-		rootCtx, mqttCtx, kafkaCtx context.Context
-		mqttCancel, kafkaCancel    context.CancelFunc
+		rootCtx, serviceCtx context.Context
+		cancel              context.CancelFunc
 	)
-	log.SetLevel(log.InfoLevel)
 	f := log.TextFormatter{
 		ForceColors:     true,
 		FullTimestamp:   true,
 		TimestampFormat: time.RFC3339Nano,
 	}
+	log.SetLevel(log.InfoLevel)
 
 	log.SetFormatter(&f)
-	log.Debug("Set log level")
+	log.Debug("Log level set")
 	if startServices {
+		stopAllServices() // Attempt to stop all the services so we have a known state.
 		rootCtx = context.Background()
-		fmt.Println("Starting MQTT")
-		mqttCtx, mqttCancel = context.WithCancel(rootCtx)
-		startMqtt(mqttCtx)
-		fmt.Println("Starting Kafka")
-		kafkaCtx, kafkaCancel = context.WithCancel(rootCtx)
-		startKafka(kafkaCtx)
+		serviceCtx, cancel = context.WithCancel(rootCtx)
+		startMqtt(serviceCtx)
+		startKafka(serviceCtx)
+		startToxi(serviceCtx)
 	}
 	rand.Seed(time.Now().Unix())
 	ret := m.Run() // Run the tests.
 	if startServices {
-		fmt.Println("Stopping MQTT")
-		mqttCancel()
-		fmt.Println("Stopping Kafka")
-		kafkaCancel()
+		fmt.Println("Stopping Services")
+		cancel()
 	}
 	os.Exit(ret)
 
@@ -69,14 +66,15 @@ func TestDummy(t *testing.T) {
          - verify obs data
 */
 func TestBasic(t *testing.T) {
-	// Todo: Remove the proxy mess from this test. It isn't needed.
+
 	logger := log.WithFields(log.Fields{"test": "TestBasic"})
 	fmt.Println("Testing basic stuff")
 	rootCtx := context.Background()
 	rTopic := getRandomString(12)
 	kafkaTopic(t, "create", rTopic)
 	bridgeCtx, bridgeCancel := context.WithCancel(rootCtx)
-	go bridge.Run(bridgeCtx, makeConfig(originMqttPort, originKafkaPort, defaultHealthPort, rTopic))
+	wg := sync.WaitGroup{}
+	go bridge.Run(bridgeCtx, mkBrigeParam(&wg, originMqttPort, originKafkaPort, defaultHealthPort, rTopic))
 	waitForBridge(t, logger, defaultHealthPort)
 	publishMqttMessages(t, rTopic, noOfMessages, 0, originMqttPort) // Publish messages
 	verifyKafkaMessages(t, rTopic, noOfMessages, originKafkaPort)   // Verify the messages.
@@ -84,6 +82,7 @@ func TestBasic(t *testing.T) {
 	verifyObsdata(t, defaultHealthPort, noOfMessages, noOfMessages+1, 0, 0)
 	bridgeCancel()
 	kafkaTopic(t, "delete", rTopic)
+	wg.Wait()
 }
 
 /*
@@ -101,65 +100,26 @@ func TestBasic(t *testing.T) {
          - verify obs data
 */
 
-func TestBasicWithProxy(t *testing.T) {
-	// Todo: Remove the proxy mess from this test. It isn't needed.
-	logger := log.WithFields(log.Fields{"test": "TestBasic"})
-
-	kafkaPort := getRandomPort()
-	toxi := toxiproxy.NewClient(fmt.Sprintf("localhost:%d", toxiPort))
-	deleteProxies(toxi) // Todo: This should be removed when tests are solid.
-	proxy, err := toxi.CreateProxy("kafka",
-		fmt.Sprintf("localhost:%d", kafkaPort),
-		fmt.Sprintf("localhost:%d", originKafkaPort))
-	defer proxy.Delete()
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println("Testing basic stuff")
-	rootCtx := context.Background()
-	rTopic := getRandomString(12)
-	kafkaTopic(t, "create", rTopic)
-	bridgeCtx, bridgeCancel := context.WithCancel(rootCtx)
-	go bridge.Run(bridgeCtx, makeConfig(originMqttPort, kafkaPort, defaultHealthPort, rTopic))
-	waitForBridge(t, logger, defaultHealthPort)
-	publishMqttMessages(t, rTopic, noOfMessages, 0, originMqttPort) // Publish messages
-	verifyKafkaMessages(t, rTopic, noOfMessages, originKafkaPort)   // Verify the messages.
-	// +1 for the kafka messages. (There is a test message, you know)
-	verifyObsdata(t, defaultHealthPort, noOfMessages, noOfMessages+1, 0, 0)
-	bridgeCancel()
-	kafkaTopic(t, "delete", rTopic)
-}
-
 func TestKafkaFailure(t *testing.T) {
-	logger := log.WithFields(log.Fields{"test": "TestBasic"})
+	logger := log.WithFields(log.Fields{"test": "TestKafkaFailure"})
 
-	// kafkaPort := getRandomPort()
-	kafkaPort := 9092
-	toxi := toxiproxy.NewClient(fmt.Sprintf("localhost:%d", toxiPort))
-	deleteProxies(toxi)
-	// proxy, err := toxi.CreateProxy("kafka",fmt.Sprintf("localhost:%d", kafkaPort),fmt.Sprintf("localhost:%d", originKafkaPort))
-	proxy, err := toxi.CreateProxy("kafka", fmt.Sprintf("localhost:%d", kafkaPort), fmt.Sprintf("localhost:%d", originKafkaPort))
-	defer proxy.Delete()
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println("Testing basic stuff")
+	fmt.Println("TestKafkaFailure")
 	rootCtx := context.Background()
 	rTopic := getRandomString(12)
 	kafkaTopic(t, "create", rTopic)
 	bridgeCtx, bridgeCancel := context.WithCancel(rootCtx)
-	go bridge.Run(bridgeCtx, makeConfig(originMqttPort, kafkaPort, defaultHealthPort, rTopic))
+	wg := sync.WaitGroup{}
+	go bridge.Run(bridgeCtx, mkBrigeParam(&wg, originMqttPort, originKafkaPort, defaultHealthPort, rTopic))
 	waitForBridge(t, logger, defaultHealthPort)
 	publishMqttMessages(t, rTopic, noOfMessages, 0, originMqttPort) // Publish messages
 	time.Sleep(1 * time.Second)                                     // Give kafka time to write stuff.
-	proxy.Disable()
 	fmt.Println("==== Kafka DISABLED === ")
-	time.Sleep(1 * time.Second)
+	failpoint.Enable("github.com/celerway/metamorphosis/bridge/kafka/writePoint", "return(true)")
 	// New batch of messages. Now kafka should be dead. note the offset.
 	publishMqttMessages(t, rTopic, noOfMessages, noOfMessages, originMqttPort) // Publish messages
 	time.Sleep(3 * time.Second)
-	proxy.Enable()
 	fmt.Println("==== Kafka ENABLED === ")
+	failpoint.Disable("github.com/celerway/metamorphosis/bridge/kafka/writePoint")
 
 	time.Sleep(3 * time.Second)                                     // Give Kafka time to recover.
 	verifyKafkaMessages(t, rTopic, noOfMessages*2, originKafkaPort) // Verify the messages.
@@ -167,7 +127,7 @@ func TestKafkaFailure(t *testing.T) {
 	verifyObsdata(t, defaultHealthPort, noOfMessages*2, noOfMessages*2+2, 0, 2)
 	bridgeCancel()
 	kafkaTopic(t, "delete", rTopic)
-
+	wg.Wait()
 }
 
 func TestMqttFailure(t *testing.T) {

@@ -1,4 +1,4 @@
-package main
+package integration
 
 type Message struct {
 	Id           int

@@ -13,7 +13,6 @@ import (
 	"io/ioutil"
 	"os"
 	"os/signal"
-	"runtime"
 	"sync"
 	"syscall"
 	"time"
@@ -22,7 +21,8 @@ import (
 const channelSize = 100
 
 func Run(ctx context.Context, params BridgeParams) {
-	var wg sync.WaitGroup
+	params.MainWaitGroup.Add(1) // allows the caller to wait for clean exit.
+	var wg sync.WaitGroup       // wg for children.
 	var tlsConfig *tls.Config
 	// In order to avoid hanging when we shut down we shutdown things in a certain order. So we use two contexts
 	// to do this.
@@ -62,6 +62,7 @@ func Run(ctx context.Context, params BridgeParams) {
 	obsParams := observability.ObservabilityParams{
 		Channel:    obsChan,
 		HealthPort: params.HealthPort,
+		WaitGroup:  &wg,
 	}
 	// Start the goroutines that do the work.
 	obs := observability.Run(obsParams) // Fire up obs.
@@ -84,22 +85,25 @@ func Run(ctx context.Context, params BridgeParams) {
 		case <-ctx.Done():
 			br.logger.Warn("Context cancelled. Initiating shutdown.")
 			mqttCancel()
-			time.Sleep(5 * time.Second) // This should be enough to make sure Kafka is flushed out.
+			time.Sleep(1 * time.Second) // This should be enough to make sure Kafka is flushed out.
 			kafkaCancel()
+			obs.Shutdown()
 			wg.Done()
 			return
 		case <-sigChan:
 			br.logger.Warn("Signal caught. Initiating shutdown.")
 			mqttCancel()
-			time.Sleep(5 * time.Second) // This should be enough to make sure Kafka is flushed out.
+			time.Sleep(1 * time.Second) // This should be enough to make sure Kafka is flushed out.
 			kafkaCancel()
+			obs.Shutdown()
 			wg.Done()
 			return
 		}
 	}()
 	br.logger.Trace("Main goroutine waiting for bridge shutdown.")
 	wg.Wait()
-	br.logger.Infof("Program exiting. There are currently %d goroutines: ", runtime.NumGoroutine())
+	br.logger.Infof("Bridge exiting")
+	params.MainWaitGroup.Done() // main group
 }
 
 func getMqttClientId() string {

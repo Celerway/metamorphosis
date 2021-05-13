@@ -85,6 +85,7 @@ Six goroutines should be running at any point in time:
  * [go-kafka](https://github.com/segmentio/kafka-go), a nice native Go Kafka client.
  * [paho.mqtt.golang](https://github.com/eclipse/paho.mqtt.golang), MQTT client. Doesn't support MQTT 5.
  * [logrus](https://github.com/sirupsen/logrus), our preferred logger
+ * [failpoint](https://github.com/pingcap/failpoint), fault injecting
 
 ## Performance
 
@@ -95,6 +96,12 @@ This is pretty slow, but we're sure not to lose any messages. If you need more p
    workers instead of round-robin.
  * Write in batches. The client can be pretty smart about this, and I think we can retain our ability to spool
    messages for as long as we need.
+
+## Running tests.
+
+Since generting faults is such a royal pain we inject faults using [failpoint](https://github.com/pingcap/failpoint). 
+Before running the tests run `failpoint-ctl enable`. Do not commit code without disabling the failpoints, 
+`failpoint-ctl disable` will disable the failpoints again.
 
 ### Todo: Tls against Kafka
 

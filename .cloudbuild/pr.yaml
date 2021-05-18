@@ -2,7 +2,7 @@ steps:
   - id: redpanda
     name: 'vectorized/redpanda:latest'
     args: [ 'redpanda', 'start',  '--overprovisioned', '--smp 1 ',  '--memory 1G', '--reserve-memory 0M', '--node-id 0',  '--check=false' ]
-    entryPoint: /usr/bin/rpk
+    entrypoint: /usr/bin/rpk
   - id: mosquitto
     name: 'eclipse-mosquitto:2'
   - id: build

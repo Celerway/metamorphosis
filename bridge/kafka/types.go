@@ -2,6 +2,7 @@ package kafka
 
 import (
 	"context"
+	"fmt"
 	"github.com/celerway/metamorphosis/bridge/observability"
 	gokafka "github.com/segmentio/kafka-go"
 	log "github.com/sirupsen/logrus"
@@ -12,6 +13,10 @@ import (
 type KafkaMessage struct {
 	Topic   string
 	Content []byte
+}
+
+func (msg KafkaMessage) String() string {
+	return fmt.Sprintf("Topic: %s, payload %s", msg.Topic, string(msg.Content))
 }
 
 type MessageChannel chan KafkaMessage

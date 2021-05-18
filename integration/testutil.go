@@ -9,7 +9,6 @@ import (
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/prometheus/common/expfmt"
 	gokafka "github.com/segmentio/kafka-go"
-	log "github.com/sirupsen/logrus"
 	"math/rand"
 	"net/http"
 	"os"
@@ -27,7 +26,7 @@ func verifyCounter(t *testing.T, name string, value float64, exptected int) {
 
 func verifyObsdata(t *testing.T, port, mqttMessages, kafkaMessages, mqttErrors, kafkaErrors int) {
 	url := fmt.Sprintf("http://localhost:%d/metrics", port)
-	log.Debugf("Quering metrics on %s", url)
+	fmt.Printf("Quering metrics on %s\n", url)
 	resp, err := http.Get(url)
 	if err != nil {
 		t.Errorf("Could not get metrics (%s): %s", url, err)
@@ -59,9 +58,9 @@ func mkBrigeParam(wg *sync.WaitGroup, mqttPort, kafkaPort, healthPort int, topic
 	}
 
 }
-func waitForBridge(t *testing.T, logger *log.Entry, port int) {
+func waitForBridge(port int) {
 	url := fmt.Sprintf("http://localhost:%d/healthz", port)
-	logger.Debugf("Waiting for bridge to come up on %s", url)
+	fmt.Printf("Waiting for bridge to come up on %s\n", url)
 
 	bridgeOk := false
 	for !bridgeOk {
@@ -75,7 +74,7 @@ func waitForBridge(t *testing.T, logger *log.Entry, port int) {
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	logger.Debug("Bridge OK.")
+	fmt.Printf("Bridge OK\n")
 }
 
 // Get a set of random ports for the proxy
@@ -158,12 +157,13 @@ func publishMqttMessages(t *testing.T, topic string, noMessages, offset, port in
 	client := getMqttClient(port)
 	for i := offset; i < noMessages+offset; i++ {
 		msg, err := makeMessage(i)
+		fmt.Printf("Sending message with ID %d on MQTT\n", i)
 		if err != nil {
 			t.Errorf("While making message: %s", err)
 		}
 		token := client.Publish(topic, 1, false, msg)
 		token.Wait()
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 	}
 	fmt.Printf("Published %d messages on MQTT\n", noMessages)
 	client.Disconnect(0)
@@ -174,7 +174,7 @@ func verifyKafkaMessages(t *testing.T, topic string, noOfMessages, port int) {
 	noOfValidMessages := 0
 
 	for noOfValidMessages < noOfMessages {
-		log.Debugf("kafka: reading message %d", noOfValidMessages)
+		fmt.Printf("kafka: reading message (expected id %d)\n", noOfValidMessages)
 		msg, err := client.ReadMessage(context.Background())
 		if err != nil {
 			t.Errorf("Reading kafka message: %s", err)
@@ -184,8 +184,8 @@ func verifyKafkaMessages(t *testing.T, topic string, noOfMessages, port int) {
 			t.Errorf("Verifying kafka message: %s", err)
 		}
 		if valid {
-			noOfValidMessages++
 			fmt.Printf("Message %d is valid\n", noOfValidMessages)
+			noOfValidMessages++
 		}
 	}
 	fmt.Printf("Verified %d messages from Kafka\n", noOfMessages)
@@ -200,7 +200,8 @@ func getKafkaReader(port int, topic string) *gokafka.Reader {
 	// Skip the two first messages. The first is a null message. The next is the one the bridge issues.
 	err := r.SetOffset(2)
 	if err != nil {
-		log.Fatalf("Setting offset: %s", err)
+		fmt.Printf("Setting offset: %s\n", err)
+		panic(err)
 	}
 	return r
 }

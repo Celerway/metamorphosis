@@ -67,7 +67,6 @@ func TestDummy(t *testing.T) {
 */
 func TestBasic(t *testing.T) {
 
-	logger := log.WithFields(log.Fields{"test": "TestBasic"})
 	fmt.Println("Testing basic stuff")
 	rootCtx := context.Background()
 	rTopic := getRandomString(12)
@@ -75,7 +74,7 @@ func TestBasic(t *testing.T) {
 	bridgeCtx, bridgeCancel := context.WithCancel(rootCtx)
 	wg := sync.WaitGroup{}
 	go bridge.Run(bridgeCtx, mkBrigeParam(&wg, originMqttPort, originKafkaPort, defaultHealthPort, rTopic))
-	waitForBridge(t, logger, defaultHealthPort)
+	waitForBridge(defaultHealthPort)
 	publishMqttMessages(t, rTopic, noOfMessages, 0, originMqttPort) // Publish messages
 	verifyKafkaMessages(t, rTopic, noOfMessages, originKafkaPort)   // Verify the messages.
 	// +1 for the kafka messages. (There is a test message, you know)
@@ -101,8 +100,6 @@ func TestBasic(t *testing.T) {
 */
 
 func TestKafkaFailure(t *testing.T) {
-	logger := log.WithFields(log.Fields{"test": "TestKafkaFailure"})
-
 	fmt.Println("TestKafkaFailure")
 	rootCtx := context.Background()
 	rTopic := getRandomString(12)
@@ -110,21 +107,31 @@ func TestKafkaFailure(t *testing.T) {
 	bridgeCtx, bridgeCancel := context.WithCancel(rootCtx)
 	wg := sync.WaitGroup{}
 	go bridge.Run(bridgeCtx, mkBrigeParam(&wg, originMqttPort, originKafkaPort, defaultHealthPort, rTopic))
-	waitForBridge(t, logger, defaultHealthPort)
-	publishMqttMessages(t, rTopic, noOfMessages, 0, originMqttPort) // Publish messages
-	time.Sleep(1 * time.Second)                                     // Give kafka time to write stuff.
+	waitForBridge(defaultHealthPort)
+	publishMqttMessages(t, rTopic, noOfMessages, 0, originMqttPort) // Publish X messages
+	time.Sleep(2 * time.Second)                                     // Give kafka time to write stuff.
 	fmt.Println("==== Kafka DISABLED === ")
-	failpoint.Enable("github.com/celerway/metamorphosis/bridge/kafka/writePoint", "return(true)")
+	// Enable failure. Each write will spend 700ms before failing.
+	failpoint.Enable("github.com/celerway/metamorphosis/bridge/kafka/writeFailure", "return(true)")
 	// New batch of messages. Now kafka should be dead. note the offset.
-	publishMqttMessages(t, rTopic, noOfMessages, noOfMessages, originMqttPort) // Publish messages
-	time.Sleep(3 * time.Second)
-	fmt.Println("==== Kafka ENABLED === ")
-	failpoint.Disable("github.com/celerway/metamorphosis/bridge/kafka/writePoint")
+	publishMqttMessages(t, rTopic, noOfMessages, noOfMessages, originMqttPort) // Publish 2nd batch of messages
+	fmt.Println("==== Kafka RECOVERED === ")
+	failpoint.Disable("github.com/celerway/metamorphosis/bridge/kafka/writeFailure")
+	fmt.Println("==== Kafka SLOWED === ")
+	// Slow down kafka to X ms per write.
+	failpoint.Enable("github.com/celerway/metamorphosis/bridge/kafka/writeDelay", "return(50)")
+	publishMqttMessages(t, rTopic, noOfMessages, noOfMessages*2, originMqttPort) // Publish 3rd batch of messages
+	time.Sleep(3 * time.Second)                                                  // Give it some time to write messages.
+	verifyKafkaMessages(t, rTopic, noOfMessages*3, originKafkaPort)              // Verify the messages.
 
-	time.Sleep(3 * time.Second)                                     // Give Kafka time to recover.
-	verifyKafkaMessages(t, rTopic, noOfMessages*2, originKafkaPort) // Verify the messages.
+	err := failpoint.Disable("github.com/celerway/metamorphosis/bridge/kafka/writeDelay")
+	if err != nil {
+		fmt.Println("Disable: ", err)
+	}
+	fmt.Println("==== Kafka Good === ")
+
 	fmt.Println("Done verifying kafka data. Checking obs data.")
-	verifyObsdata(t, defaultHealthPort, noOfMessages*2, noOfMessages*2+2, 0, 2)
+	verifyObsdata(t, defaultHealthPort, noOfMessages*3, noOfMessages*3+2, 0, 1)
 	bridgeCancel()
 	kafkaTopic(t, "delete", rTopic)
 	wg.Wait()

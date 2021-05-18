@@ -85,7 +85,7 @@ func Run(ctx context.Context, params BridgeParams) {
 		case <-ctx.Done():
 			br.logger.Warn("Context cancelled. Initiating shutdown.")
 			mqttCancel()
-			time.Sleep(1 * time.Second) // This should be enough to make sure Kafka is flushed out.
+			time.Sleep(3 * time.Second) // This should be enough to make sure Kafka is flushed out.
 			kafkaCancel()
 			obs.Shutdown()
 			wg.Done()

@@ -62,21 +62,28 @@ func mainloop(ctx context.Context, client kafkaClient) {
 				}
 			}
 		case msg := <-client.ch: // Got a message from the bridge.
+			client.logger.Tracef("Got write. Alive: %v, Message %v", alive, msg)
 			if alive {
 				success := client.writeHandler(ctx, client, msg) // Send msg.
 				if !success {                                    // Kafka failed. :-(
 					msgBuffer = append(msgBuffer, msg)
+					client.logger.Errorf("Kafka write failed. Marking kafka as failed.")
 					client.logger.Infof("Message spooled. Currently %d messages in the spool.", len(msgBuffer))
 					alive = false
 					lastAttempt = time.Now() // Time of last failure.
 				}
 			} else { // alive == false here.
 				if time.Since(lastAttempt) < client.retryInterval { // Less than Xs since last try. Just spool the message.
+
 					msgBuffer = append(msgBuffer, msg) // Todo: Should we limit the number of messages we can spool?
-					client.logger.Infof("Message spooled. Currently %d messages in the spool.", len(msgBuffer))
+					client.logger.Infof("Kafka assumed down. Spooling. Currently %d messages in the spool.", len(msgBuffer))
 				} else { // retryInterval passed. Lets try a test message.
+					client.logger.Info("Checking if Kafka has recovered with test message.")
+					// We gotta send a test message here since there might be messages in the spool.
 					success := sendTestMessage(ctx, client)
 					if success {
+						// Append the new message to the spool so we preserve order.
+						msgBuffer = append(msgBuffer, msg)
 						client.logger.Warnf("Kafka has recovered (on new message) Spool: %d", len(msgBuffer))
 						lastAttempt = time.Now()
 						msgBuffer, alive = despool(ctx, msgBuffer, client) // Actual de-spool here.
@@ -126,8 +133,9 @@ func getWriter(client kafkaClient) *gokafka.Writer {
 		Balancer:     &gokafka.LeastBytes{},
 		BatchSize:    1, // Write single messages.
 		MaxAttempts:  1,
-		RequiredAcks: gokafka.RequireAll,
-		ErrorLogger:  client.logger,
+		RequiredAcks: gokafka.RequireNone,
+		// RequiredAcks: gokafka.RequireAll,
+		ErrorLogger: client.logger,
 	}
 	client.logger.Debugf("Created a Kafka writer on %s/%s", broker, client.topic)
 	return w
@@ -135,20 +143,27 @@ func getWriter(client kafkaClient) *gokafka.Writer {
 
 // The handler that gets called when we get a message.
 func handleMessageWrite(ctx context.Context, client kafkaClient, msg KafkaMessage) bool {
-	synthFailed := false
+	synthFailed := false // If set to true then we'll generate an error instead of actually writing.
 	startWriteTime := time.Now()
-	client.logger.Debugf("Issuing write to kafka (mqtt topic: %s, kafka topic: %s)", msg.Topic, client.topic)
+	client.logger.Debugf("Issuing write to kafka (mqtt topic: %s, kafka topic: %s, payload: %s)", msg.Topic, client.topic, msg.Content)
 	msgJson, err := json.Marshal(msg)
 	if err != nil {
 		client.logger.Errorf("Could not marshal message %v: %s", msg, err)
 		client.obsChannel <- observability.KafkaError
 		return true // Guess there isn't much we can do at this point but to move on.
 	}
-	client.logger.Tracef("Kafka(%s): %s", client.topic, string(msgJson))
 	kMsg := gokafka.Message{Value: msgJson}
-	failpoint.Inject("writePoint", func() {
+
+	failpoint.Inject("writeDelay", func(val failpoint.Value) {
+		delay, ok := val.(int)
+		if ok {
+			time.Sleep(time.Duration(delay) * time.Millisecond)
+		}
+	})
+	failpoint.Inject("writeFailure", func() {
 		synthFailed = true
 	})
+
 	if !synthFailed {
 		err = client.writer.WriteMessages(ctx, kMsg)
 	} else {
@@ -161,7 +176,12 @@ func handleMessageWrite(ctx context.Context, client kafkaClient, msg KafkaMessag
 	} else {
 		client.obsChannel <- observability.KafkaSent
 	}
-	client.logger.Debugf("Write done(topic %s). Took %v", msg.Topic, time.Since(startWriteTime))
+
+	if time.Since(startWriteTime) > 50*time.Millisecond {
+		client.logger.Warnf("Write done, but slow! (topic %s). Took %v", msg.Topic, time.Since(startWriteTime))
+	} else {
+		client.logger.Debugf("Write done(topic %s). Took %v", msg.Topic, time.Since(startWriteTime))
+	}
 	return true
 }
 

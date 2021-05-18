@@ -55,6 +55,6 @@ func kafkaTopic(t *testing.T, action, topic string) {
 	if action == "create" {
 		time.Sleep(3 * time.Second) // Just sleep a bit to make sure that kafka catches up.
 	}
-	log.Debug("kafka topic successfully executed")
+	log.Debug("kafka topic executed")
 	log.Debugf("Stdout: %s, \nStderr: %s", stdout.String(), stderr.String())
 }

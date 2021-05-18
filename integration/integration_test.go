@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"github.com/celerway/metamorphosis/bridge"
@@ -8,6 +9,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"math/rand"
 	"os"
+	"os/exec"
 	"sync"
 	"testing"
 	"time"
@@ -52,7 +54,18 @@ func TestMain(m *testing.M) {
 }
 
 func TestDummy(t *testing.T) {
-	fmt.Println("Dummy test ok")
+	var stdout, stderr bytes.Buffer
+	fmt.Println("Dummy test running. Listing topics.")
+	cmd := exec.Command("rpk", "topic", "-v", "list")
+
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	if err != nil {
+		t.Errorf("Kafka topic (list) stdout: %s stderr: %s err: %s", stdout.String(), stderr.String(), err)
+	}
+	log.Debugf("Stdout: %s, \nStderr: %s", stdout.String(), stderr.String())
+
 }
 
 /*

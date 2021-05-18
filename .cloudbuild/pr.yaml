@@ -1,7 +1,7 @@
 steps:
   - id: docker-compose
     name: 'docker/compose:1.19.0'
-    args: ['-f', 'docker-compose.yml', '-f', 'docker-compose.ci.yml', 'up', '-d']
+    args: ['-f', 'docker-compose.yaml', 'up', '-d']
     env:
       - 'PROJECT_ID=$PROJECT_ID'
   - id: build

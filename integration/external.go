@@ -13,7 +13,6 @@ import (
 func stopAllServices() {
 	exec.Command("pkill", "mosquitto").Run()
 	exec.Command("sudo", "rpk", "redpanda", "stop").Run()
-	exec.Command("pkill", "toxiproxy-server").Run()
 }
 
 func startMqtt(ctx context.Context) {
@@ -39,18 +38,6 @@ func startKafka(ctx context.Context) {
 			panic("Error:" + err.Error())
 		} else {
 			fmt.Println("Kafka started")
-		}
-	}()
-}
-
-func startToxi(ctx context.Context) {
-	go func() {
-		output, err := exec.CommandContext(ctx, "/usr/bin/toxiproxy-server").CombinedOutput()
-		if err != nil {
-			fmt.Println(output)
-			panic("Error:" + err.Error())
-		} else {
-			fmt.Println("ToxiProxy started")
 		}
 	}()
 }

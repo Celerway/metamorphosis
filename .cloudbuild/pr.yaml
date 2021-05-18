@@ -1,5 +1,12 @@
 steps:
-  - name: 'gcr.io/cloud-builders/docker'
+  - id: redpanda
+    name: 'vectorized/redpanda:latest'
+    args: [ 'start',  '--overprovisioned', '--smp 1 ',  '--memory 1G', '--reserve-memory 0M', '--node-id 0',  '--check=false' ]
+  - id: mosquitto
+    name: 'eclipse-mosquitto:2'
+  - id: build
+    name: 'gcr.io/cloud-builders/docker'
     args: [ 'build', '--tag=eu.gcr.io/${PROJECT_ID}/${REPO_NAME}:${BRANCH_NAME}-${SHORT_SHA}', '.' ]
+    waitFor: [redpanda, mosquitto]
 
-images: ['eu.gcr.io/${PROJECT_ID}/${REPO_NAME}:${BRANCH_NAME}-${SHORT_SHA}']
+images: [ 'eu.gcr.io/${PROJECT_ID}/${REPO_NAME}:${BRANCH_NAME}-${SHORT_SHA}' ]

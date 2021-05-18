@@ -70,6 +70,8 @@ func (client *mqttClient) connect() {
 	client.logger.Debug("MQTT client starting connect to broker.")
 	token := client.paho.Connect()
 	if token.Wait() && token.Error() != nil {
+		client.logger.Error("Could not connect to MQTT. Will let kafka get 3s to finish any writes.")
+		time.Sleep(3 * time.Second)
 		client.logger.Fatalf("Could not connect to broker: %s", token.Error())
 		// What do we do here? My suggestion is to fail the service (abort)
 		// and assume that k8s will restart the pod.

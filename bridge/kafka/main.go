@@ -49,14 +49,14 @@ func mainloop(ctx context.Context, client kafkaClient) {
 	client.logger.Infof("Kafka writer running %s:%d, retry is %v", client.broker, client.port, client.retryInterval)
 	for keepRunning {
 		select {
-		case <-ctx.Done():
+		case <-ctx.Done(): // Context cancelled.
 			client.logger.Info("Kafka writer shutting down")
 			keepRunning = false
 		case <-time.After(client.retryInterval): // Automatically retry even if there are no new messages.
 			if !alive {
 				success := sendTestMessage(ctx, client)
 				if success {
-					client.logger.Warnf("Kafka has recovered (retryInterval) Spool: %d", len(msgBuffer))
+					client.logger.Warnf("Kafka has recovered (on retryInterval) Spool: %d", len(msgBuffer))
 					lastAttempt = time.Now()
 					msgBuffer, alive = despool(ctx, msgBuffer, client) // Actual de-spool here.
 				}
@@ -65,29 +65,29 @@ func mainloop(ctx context.Context, client kafkaClient) {
 			client.logger.Tracef("Got write. Alive: %v, Message %v", alive, msg)
 			if alive {
 				success := client.writeHandler(ctx, client, msg) // Send msg.
-				if !success {                                    // Kafka failed. :-(
+				if !success {                                    // Kafka was up, but now it is down.
 					msgBuffer = append(msgBuffer, msg)
 					client.logger.Errorf("Kafka write failed. Marking kafka as failed.")
 					client.logger.Infof("Message spooled. Currently %d messages in the spool.", len(msgBuffer))
 					alive = false
 					lastAttempt = time.Now() // Time of last failure.
 				}
-			} else { // alive == false here.
-				if time.Since(lastAttempt) < client.retryInterval { // Less than Xs since last try. Just spool the message.
-
+			} else { // alive == false here. Kafka is assumed down.
+				if time.Since(lastAttempt) < client.retryInterval { // Less than retryInterval since last try. Just spool the message.
 					msgBuffer = append(msgBuffer, msg) // Todo: Should we limit the number of messages we can spool?
 					client.logger.Infof("Kafka assumed down. Spooling. Currently %d messages in the spool.", len(msgBuffer))
 				} else { // retryInterval passed. Lets try a test message.
 					client.logger.Info("Checking if Kafka has recovered with test message.")
 					// We gotta send a test message here since there might be messages in the spool.
 					success := sendTestMessage(ctx, client)
-					if success {
+					if success { // Kafka seems up again.
 						// Append the new message to the spool so we preserve order.
 						msgBuffer = append(msgBuffer, msg)
 						client.logger.Warnf("Kafka has recovered (on new message) Spool: %d", len(msgBuffer))
 						lastAttempt = time.Now()
+						// Not that if despool failed we get the remainder back.
 						msgBuffer, alive = despool(ctx, msgBuffer, client) // Actual de-spool here.
-					} else { // success == false
+					} else { // success == false, kafka is still down.
 						lastAttempt = time.Now()
 						msgBuffer = append(msgBuffer, msg)
 					}
@@ -95,7 +95,7 @@ func mainloop(ctx context.Context, client kafkaClient) {
 			}
 		}
 	}
-	client.logger.Info("Kafka done.")
+	client.logger.Info("Kafka client done.")
 	client.waitGroup.Done()
 }
 
@@ -131,9 +131,9 @@ func getWriter(client kafkaClient) *gokafka.Writer {
 		Addr:         gokafka.TCP(broker),
 		Topic:        client.topic,
 		Balancer:     &gokafka.LeastBytes{},
-		BatchSize:    1, // Write single messages.
-		MaxAttempts:  1,
-		RequiredAcks: gokafka.RequireNone,
+		BatchSize:    1, // Write single messages. This affects performance.
+		MaxAttempts:  10,
+		RequiredAcks: gokafka.RequireAll,
 		// RequiredAcks: gokafka.RequireAll,
 		ErrorLogger: client.logger,
 	}

@@ -40,7 +40,6 @@ func TestMain(m *testing.M) {
 		serviceCtx, cancel = context.WithCancel(rootCtx)
 		startMqtt(serviceCtx)
 		startKafka(serviceCtx)
-		startToxi(serviceCtx)
 	}
 	rand.Seed(time.Now().Unix())
 	ret := m.Run() // Run the tests.

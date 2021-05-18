@@ -30,7 +30,7 @@ func TestMain(m *testing.M) {
 		FullTimestamp:   true,
 		TimestampFormat: time.RFC3339Nano,
 	}
-	log.SetLevel(log.InfoLevel)
+	log.SetLevel(log.DebugLevel)
 
 	log.SetFormatter(&f)
 	log.Debug("Log level set")

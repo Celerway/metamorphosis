@@ -4,11 +4,6 @@ ENV GOOS=linux
 ENV DOCKER_BUILDKIT=1
 WORKDIR /src
 COPY . .
-RUN go install github.com/vectorized/redpanda/src/go/rpk@latest \
-    && go install github.com/pingcap/failpoint/failpoint-ctl@latest \
-    && /go/bin/failpoint-ctl enable \
-    && PATH=$PATH:/go/bin go test ./... \
-    && /go/bin/failpoint-ctl disable
 RUN go build  -o /out/metamorphosis cmd/main.go
 FROM alpine AS base
 COPY --from=build /out/metamorphosis /

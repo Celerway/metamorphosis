@@ -1,10 +1,10 @@
 steps:
   - id: docker-compose
     name: 'docker/compose:1.19.0'
-    args: ['-f', 'docker-compose.yaml', 'up', '-d']
+    args: ['-f', '.cloudbuild/docker-compose.yaml', 'up', '-d']
   - id: build
     name: 'gcr.io/cloud-builders/docker'
-    args: [ 'build', '--tag=eu.gcr.io/${PROJECT_ID}/${REPO_NAME}:${BRANCH_NAME}-${SHORT_SHA}', '.' ]
+    args: [ 'build', '--tag=eu.gcr.io/${PROJECT_ID}/${REPO_NAME}:${BRANCH_NAME}-${SHORT_SHA}', '-f', '.cloudbuild/Dockerfile-ci.yaml', '.' ]
     waitFor: [docker-compose]
 
 images: [ 'eu.gcr.io/${PROJECT_ID}/${REPO_NAME}:${BRANCH_NAME}-${SHORT_SHA}' ]

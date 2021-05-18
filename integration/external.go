@@ -43,7 +43,7 @@ func startKafka(ctx context.Context) {
 }
 
 func kafkaTopic(t *testing.T, action, topic string) {
-	cmd := exec.Command("rpk", "topic", action, topic)
+	cmd := exec.Command("rpk", "topic", "-v", action, topic)
 	var stdout, stderr bytes.Buffer
 	log.Infof("kafka topic(%s): %s", action, topic)
 	cmd.Stdout = &stdout
@@ -56,4 +56,5 @@ func kafkaTopic(t *testing.T, action, topic string) {
 		time.Sleep(3 * time.Second) // Just sleep a bit to make sure that kafka catches up.
 	}
 	log.Debug("kafka topic successfully executed")
+	log.Debugf("Stdout: %s, \nStderr: %s", stdout.String(), stderr.String())
 }

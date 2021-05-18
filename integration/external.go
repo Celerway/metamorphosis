@@ -45,7 +45,7 @@ func startKafka(ctx context.Context) {
 func kafkaTopic(t *testing.T, action, topic string) {
 	cmd := exec.Command("rpk", "topic", action, topic)
 	var stdout, stderr bytes.Buffer
-	log.Debugf("kafka topic(%s): %s", action, topic)
+	log.Infof("kafka topic(%s): %s", action, topic)
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	err := cmd.Run()

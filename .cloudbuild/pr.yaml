@@ -1,10 +1,9 @@
 steps:
-  - id: redpanda
-    name: 'vectorized/redpanda:latest'
-    args: [ 'redpanda', 'start',  '--overprovisioned', '--smp', '1',  '--memory','1G', '--node-id','0',  '--check=false' ]
-    entrypoint: /usr/bin/rpk
-  - id: mosquitto
-    name: 'eclipse-mosquitto:2'
+  - id: docker-compose
+    name: 'docker/compose:1.19.0'
+    args: ['-f', 'docker-compose.yml', '-f', 'docker-compose.ci.yml', 'up', '-d']
+    env:
+      - 'PROJECT_ID=$PROJECT_ID'
   - id: build
     name: 'gcr.io/cloud-builders/docker'
     args: [ 'build', '--tag=eu.gcr.io/${PROJECT_ID}/${REPO_NAME}:${BRANCH_NAME}-${SHORT_SHA}', '.' ]

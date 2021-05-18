@@ -7,6 +7,6 @@ steps:
   - id: build
     name: 'gcr.io/cloud-builders/docker'
     args: [ 'build', '--tag=eu.gcr.io/${PROJECT_ID}/${REPO_NAME}:${BRANCH_NAME}-${SHORT_SHA}', '.' ]
-    waitFor: [redpanda, mosquitto]
+    waitFor: [docker-compose]
 
 images: [ 'eu.gcr.io/${PROJECT_ID}/${REPO_NAME}:${BRANCH_NAME}-${SHORT_SHA}' ]

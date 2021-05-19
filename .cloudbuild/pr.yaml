@@ -4,7 +4,7 @@ steps:
     args: ['-f', '.cloudbuild/docker-compose.yaml', 'up', '-d']
   - id: test
     name: golang
-    args: ['sh', '-c', './cloudbuild/testrunner.sh']
+    args: ['sh', '-c', '.cloudbuild/testrunner.sh']
     waitFor: [docker-compose]
   - id: build
     name: 'gcr.io/cloud-builders/docker'

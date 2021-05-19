@@ -1,6 +1,6 @@
 steps:
   - id: docker-compose
-    name: 'docker/compose:1.19.0'
+    name: 'docker/compose'
     args: ['-f', '.cloudbuild/docker-compose.yaml', 'up', '-d']
   - id: test
     name: golang

@@ -19,14 +19,9 @@ const noOfMessages = 20
 const originMqttPort = 1883
 const originKafkaPort = 9092
 const defaultHealthPort = 8080
-const startServices = false
 
 func TestMain(m *testing.M) {
 	// Main setup goroutine
-	var (
-		rootCtx, serviceCtx context.Context
-		cancel              context.CancelFunc
-	)
 	f := log.TextFormatter{
 		ForceColors:     true,
 		FullTimestamp:   true,
@@ -36,19 +31,8 @@ func TestMain(m *testing.M) {
 
 	log.SetFormatter(&f)
 	log.Debug("Log level set")
-	if startServices {
-		stopAllServices() // Attempt to stop all the services so we have a known state.
-		rootCtx = context.Background()
-		serviceCtx, cancel = context.WithCancel(rootCtx)
-		startMqtt(serviceCtx)
-		startKafka(serviceCtx)
-	}
 	rand.Seed(time.Now().Unix())
 	ret := m.Run() // Run the tests.
-	if startServices {
-		fmt.Println("Stopping Services")
-		cancel()
-	}
 	os.Exit(ret)
 
 }

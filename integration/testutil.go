@@ -48,7 +48,7 @@ func mkBrigeParam(wg *sync.WaitGroup, mqttPort, kafkaPort, healthPort int, topic
 		MqttPort:           mqttPort,
 		MqttTopic:          topic,
 		MqttTls:            false,
-		KafkaBroker:        "0.0.0.0",
+		KafkaBroker:        "localhost",
 		KafkaPort:          kafkaPort,
 		KafkaTopic:         topic,
 		KafkaWorkers:       1,

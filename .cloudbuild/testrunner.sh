@@ -1,7 +1,11 @@
 #!/bin/sh
+
+# This runs the tests inside of Google Cloud Build.
 set -x
 set -e
-wget https://github.com/vectorizedio/redpanda/releases/download/v21.5.2/rpk-linux-amd64.zip
+apt-get update
+apt-get install -y unzip
+wget -q https://github.com/vectorizedio/redpanda/releases/download/v21.5.2/rpk-linux-amd64.zip
 unzip rpk-linux-amd64.zip
 mv rpk /usr/local/bin
 rpk topic list

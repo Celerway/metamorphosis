@@ -1,8 +1,10 @@
 version: '3.3'
+networks:
+  default:
+    external:
+      name: cloudbuild
 services:
   redpanda:
-    networks:
-      - cloudbuild
     entrypoint:
       - /usr/bin/rpk
       - redpanda
@@ -23,8 +25,6 @@ services:
     ports:
       - 9092:9092
   mosquitto:
-    networks:
-      - cloudbuild
     image: eclipse-mosquitto
     container_name: mosquitto
     ports:

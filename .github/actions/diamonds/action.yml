@@ -1,0 +1,11 @@
+name: 'diamonds'
+description: 'Diamonds for reviewers'
+runs:
+  using: 'composite'
+  steps:
+    - run: |
+        sudo apt-get update && sudo apt-get install httpie
+        pr=($(echo $GITHUB_REF | tr "/" "\n"))
+        pr_number=${pr[2]}
+        http --ignore-stdin -v 'https://umobu.no/diamonds/v1/review' APIKey:5d05317ab10c18f538079b114dfd0b68 Reviewer=${{github.actor}} Repo=https://github.com/${{ github.repository }} Pr:=${pr_number} Badge=💎
+      shell: bash

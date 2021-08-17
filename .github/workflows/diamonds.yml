@@ -1,0 +1,10 @@
+name: Diamonds
+on: [pull_request_review, pull_request_review_comment]
+
+jobs:
+  Reward:
+    runs-on: [ubuntu-latest]
+    steps:
+      - uses: actions/checkout@v2
+      - name: Review reward
+        uses: ./.github/actions/diamonds

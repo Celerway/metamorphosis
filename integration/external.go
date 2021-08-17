@@ -13,7 +13,6 @@ import (
 func stopAllServices() {
 	exec.Command("pkill", "mosquitto").Run()
 	exec.Command("sudo", "rpk", "redpanda", "stop").Run()
-	exec.Command("pkill", "toxiproxy-server").Run()
 }
 
 func startMqtt(ctx context.Context) {
@@ -43,22 +42,10 @@ func startKafka(ctx context.Context) {
 	}()
 }
 
-func startToxi(ctx context.Context) {
-	go func() {
-		output, err := exec.CommandContext(ctx, "/usr/bin/toxiproxy-server").CombinedOutput()
-		if err != nil {
-			fmt.Println(output)
-			panic("Error:" + err.Error())
-		} else {
-			fmt.Println("ToxiProxy started")
-		}
-	}()
-}
-
 func kafkaTopic(t *testing.T, action, topic string) {
-	cmd := exec.Command("rpk", "topic", action, topic)
+	cmd := exec.Command("rpk", "topic", "-v", action, topic)
 	var stdout, stderr bytes.Buffer
-	log.Debugf("kafka topic(%s): %s", action, topic)
+	log.Infof("kafka topic(%s): %s", action, topic)
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	err := cmd.Run()
@@ -68,5 +55,6 @@ func kafkaTopic(t *testing.T, action, topic string) {
 	if action == "create" {
 		time.Sleep(3 * time.Second) // Just sleep a bit to make sure that kafka catches up.
 	}
-	log.Debug("kafka topic successfully executed")
+	log.Debug("kafka topic executed")
+	log.Debugf("Stdout: %s, \nStderr: %s", stdout.String(), stderr.String())
 }

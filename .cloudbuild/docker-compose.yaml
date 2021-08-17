@@ -1,0 +1,33 @@
+version: '3.3'
+networks:
+  default:
+    external:
+      name: cloudbuild
+services:
+  redpanda:
+    entrypoint:
+      - /usr/bin/rpk
+      - redpanda
+      - start
+      - --smp
+      - '1'
+      - --reserve-memory
+      - 0M
+      - --overprovisioned
+      - --node-id
+      - '0'
+      - --kafka-addr
+      - 0.0.0.0:9092
+      - --advertise-kafka-addr
+      - 127.0.0.1:9092
+    image: vectorized/redpanda:v21.4.13
+    container_name: redpanda
+    ports:
+      - 9092:9092
+  mosquitto:
+    image: eclipse-mosquitto
+    container_name: mosquitto
+    ports:
+      - 1883:1883
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf

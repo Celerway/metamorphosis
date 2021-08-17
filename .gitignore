@@ -1,3 +1,5 @@
 /.env
 /bin/
 /.tls
+/.idea/deployment.xml
+/.idea/remote-targets.xml

@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"github.com/celerway/metamorphosis/bridge"
@@ -8,6 +9,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"math/rand"
 	"os"
+	"os/exec"
 	"sync"
 	"testing"
 	"time"
@@ -17,43 +19,37 @@ const noOfMessages = 20
 const originMqttPort = 1883
 const originKafkaPort = 9092
 const defaultHealthPort = 8080
-const startServices = false
 
 func TestMain(m *testing.M) {
 	// Main setup goroutine
-	var (
-		rootCtx, serviceCtx context.Context
-		cancel              context.CancelFunc
-	)
 	f := log.TextFormatter{
 		ForceColors:     true,
 		FullTimestamp:   true,
 		TimestampFormat: time.RFC3339Nano,
 	}
-	log.SetLevel(log.InfoLevel)
+	log.SetLevel(log.DebugLevel)
 
 	log.SetFormatter(&f)
 	log.Debug("Log level set")
-	if startServices {
-		stopAllServices() // Attempt to stop all the services so we have a known state.
-		rootCtx = context.Background()
-		serviceCtx, cancel = context.WithCancel(rootCtx)
-		startMqtt(serviceCtx)
-		startKafka(serviceCtx)
-		startToxi(serviceCtx)
-	}
 	rand.Seed(time.Now().Unix())
 	ret := m.Run() // Run the tests.
-	if startServices {
-		fmt.Println("Stopping Services")
-		cancel()
-	}
 	os.Exit(ret)
 
 }
 
 func TestDummy(t *testing.T) {
-	fmt.Println("Dummy test ok")
+	var stdout, stderr bytes.Buffer
+	fmt.Println("Dummy test running. Listing topics.")
+	cmd := exec.Command("rpk", "topic", "-v", "list")
+
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	if err != nil {
+		t.Errorf("Kafka topic (list) stdout: %s stderr: %s err: %s", stdout.String(), stderr.String(), err)
+	}
+	log.Debugf("Stdout: %s, \nStderr: %s", stdout.String(), stderr.String())
+
 }
 
 /*

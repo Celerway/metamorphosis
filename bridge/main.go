@@ -21,7 +21,7 @@ import (
 const channelSize = 100
 
 func Run(ctx context.Context, params BridgeParams) {
-	params.MainWaitGroup.Add(1) // allows the caller to wait for clean exit.
+	// params.MainWaitGroup.Add(1) // allows the caller to wait for clean exit.
 	var wg sync.WaitGroup       // wg for children.
 	var tlsConfig *tls.Config
 	// In order to avoid hanging when we shut down we shutdown things in a certain order. So we use two contexts
@@ -72,6 +72,7 @@ func Run(ctx context.Context, params BridgeParams) {
 	}
 	mqtt.Run(mqttCtx, mqttParams) // Then connect to MQTT
 	obs.Ready()
+	log.Debug("Obs marked as READY")
 
 	sigChan := make(chan os.Signal)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)

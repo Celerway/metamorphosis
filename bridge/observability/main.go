@@ -50,7 +50,9 @@ func Run(params ObservabilityParams) *observability {
 		Name: "kafka_errors",
 		Help: "No of errors encountered with Kafka",
 	})
+	log.Debug("Obs entering mainloop")
 	go obs.mainloop()
+	log.Debug("Obs starting http server")
 	obs.runHttpServer()
 	return &obs // Return the struct so the bridge can adjust the health status.
 }

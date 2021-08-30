@@ -94,8 +94,10 @@ func main() {
 	}
 	log.Infof("Startup options: %v", runConfig)
 	log.Debug("Starting bridge")
+	runConfig.MainWaitGroup.Add(1)
 	go bridge.Run(context.Background(), runConfig)
 	wg.Wait()
+	log.Debug("Waiting over. Exiting.")
 
 }
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	_ "embed"
 	"flag"
 	"github.com/celerway/metamorphosis/bridge"
 	"github.com/joho/godotenv"
@@ -12,6 +13,9 @@ import (
 	"sync"
 	"time"
 )
+
+//go:embed .version
+var embeddedVersion string
 
 func main() {
 	var (
@@ -32,7 +36,7 @@ func main() {
 	)
 
 	err := godotenv.Load()
-	log.Info("Metamorphosis starting up.")
+	log.Infof("Metamorphosis %s starting up.", embeddedVersion)
 	if err != nil {
 		log.Infof("Error loading .env file, assuming production: %s", err.Error())
 	}

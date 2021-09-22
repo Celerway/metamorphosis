@@ -1,0 +1,9 @@
+{
+  "issueUrlFormat": "{{host}}/{{owner}}/{{repository}}/pull/{{id}}",
+  "bumpFiles": [
+    {
+      "filename": "cmd/.version",
+      "type": "plain-text"
+    }
+  ]
+}

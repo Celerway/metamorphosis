@@ -6,6 +6,7 @@ import (
 	"github.com/celerway/metamorphosis/bridge/observability"
 	paho "github.com/eclipse/paho.mqtt.golang"
 	log "github.com/sirupsen/logrus"
+	"os"
 	"time"
 )
 
@@ -37,8 +38,7 @@ func Run(ctx context.Context, params MqttParams) {
 	opts.SetOnConnectHandler(client.handleConnect)
 	pahoClient := paho.NewClient(opts)
 	client.paho = pahoClient
-	client.connect()   // blocks and aborts on failure.
-	client.subscribe() //  blocks. Also sets up handlers.
+	client.connect() // blocks and aborts on failure.
 	client.logger.Info("Starting MQTT client worker")
 	go client.mainloop(ctx)
 }
@@ -67,14 +67,30 @@ func (client mqttClient) mainloop(ctx context.Context) {
 // connect
 // Connects to the broker. Blocks until the connection is established.
 func (client *mqttClient) connect() {
-	client.logger.Infof("MQTT client starting connect to broker %s:%d (tls: %v).", client.broker, client.port, client.tls)
-	token := client.paho.Connect()
-	if token.Wait() && token.Error() != nil {
-		client.logger.Errorf("Could not connect to MQTT (%s). Will let kafka get 3s to finish any writes.", token.Error())
-		time.Sleep(3 * time.Second)
-		client.logger.Fatalf("Could not connect to broker: %s", token.Error())
-		// What do we do here? My suggestion is to fail the service (abort)
-		// and assume that k8s will restart the pod.
+	const connectionAttempts = 10
+	connected := false
+	attempts := 0
+	for !connected && attempts < connectionAttempts {
+		client.logger.Infof("MQTT client connection attempt %d: connect to broker %s:%d (tls: %v).",
+			attempts, client.broker, client.port, client.tls)
+		token := client.paho.Connect()
+		if token.Wait() && token.Error() != nil {
+			client.logger.Errorf("Could not connect to MQTT (%s). ", token.Error())
+			time.Sleep(3 * time.Second)
+			client.logger.Errorf("Could not connect to broker: %s", token.Error())
+			// What do we do here? My suggestion is to fail the service (abort)
+			// and assume that k8s will restart the pod.
+		} else {
+			connected = true
+			client.subscribe() //  blocks. Also sets up handlers.
+
+		}
+		attempts++
+	}
+	if !connected && attempts >= connectionAttempts {
+		client.logger.Errorf("Max number of connection attempt reached. Giving up and aborting.")
+		time.Sleep(time.Second)
+		os.Exit(1)
 	}
 	client.logger.Infof("Worker '%v' connected to MQTT %s:%d", client.clientId, client.broker, client.port)
 }

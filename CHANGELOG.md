@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.1.5](https://github.com/Celerway/metamorphosis/compare/v0.1.4...v0.1.5) (2021-09-22)
+
+
+### Bug Fixes
+
+* add version output on startup ([6464ba0](https://github.com/Celerway/metamorphosis/commit/6464ba020015496d689681ad0d5b6261418e242a))
+* Retry MQTT connection 10 times with 3 seconds between each attempt. ([2d8e909](https://github.com/Celerway/metamorphosis/commit/2d8e909463cac1aa630e88fc76f49e8d3aa5f52e))
+
 ### [0.1.4](https://github.com/Celerway/metamorphosis/compare/v0.1.3...v0.1.4) (2021-08-30)
 
 

@@ -23,6 +23,7 @@ type BridgeParams struct {
 	HealthPort         int
 	KafkaRetryInterval time.Duration
 	MainWaitGroup      *sync.WaitGroup
+	MqttClientId       string
 }
 
 type bridge struct {

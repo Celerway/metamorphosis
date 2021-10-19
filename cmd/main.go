@@ -23,7 +23,8 @@ func main() {
 		mqttBroker           string
 		mqttPort             int = 8883
 		mqttTopic            string
-		mqttTls              bool = true
+		mqttTls              bool   = true
+		mqttClientId         string = "metamorphosis"
 		caRootCertFile       string
 		mqttCaClientCertFile string
 		mqttCaClientKeyFile  string
@@ -57,6 +58,8 @@ func main() {
 		LookupEnvOrInt("MQTT_PORT", mqttPort), "Mqtt broker port.")
 	flag.StringVar(&mqttTopic, "mqtt-topic",
 		LookupEnvOrString("MQTT_TOPIC", mqttTopic), "MQTT topic to listen to (wildcards ok)")
+	flag.StringVar(&mqttClientId, "mqtt-client-id",
+		LookupEnvOrString("MQTT_CLIENT_ID", mqttClientId), "MQTT client id")
 	flag.StringVar(&kafkaBroker, "kafka-broker",
 		LookupEnvOrString("KAFKA_BROKER", kafkaBroker), "Kafka broker hostname")
 	flag.IntVar(&kafkaPort, "kakfa-port",
@@ -85,6 +88,7 @@ func main() {
 		MqttPort:           mqttPort,
 		MqttTopic:          mqttTopic,
 		MqttTls:            mqttTls,
+		MqttClientId:       mqttClientId,
 		TlsRootCrtFile:     caRootCertFile,
 		MqttClientCertFile: mqttCaClientCertFile,
 		MqttClientKeyFile:  mqttCaClientKeyFile,

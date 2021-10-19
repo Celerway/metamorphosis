@@ -5,7 +5,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
-	"fmt"
 	"github.com/celerway/metamorphosis/bridge/kafka"
 	"github.com/celerway/metamorphosis/bridge/mqtt"
 	"github.com/celerway/metamorphosis/bridge/observability"
@@ -22,7 +21,7 @@ const channelSize = 100
 
 func Run(ctx context.Context, params BridgeParams) {
 	// params.MainWaitGroup.Add(1) // allows the caller to wait for clean exit.
-	var wg sync.WaitGroup       // wg for children.
+	var wg sync.WaitGroup // wg for children.
 	var tlsConfig *tls.Config
 	// In order to avoid hanging when we shut down we shutdown things in a certain order. So we use two contexts
 	// to do this.
@@ -45,7 +44,7 @@ func Run(ctx context.Context, params BridgeParams) {
 		Port:       params.MqttPort,
 		Topic:      params.MqttTopic,
 		Tls:        params.MqttTls,
-		Clientid:   getMqttClientId(),
+		Clientid:   params.MqttClientId,
 		Channel:    br.mqttCh,
 		WaitGroup:  &wg,
 		ObsChannel: obsChan,
@@ -105,10 +104,6 @@ func Run(ctx context.Context, params BridgeParams) {
 	wg.Wait()
 	br.logger.Infof("Bridge exiting")
 	params.MainWaitGroup.Done() // main group
-}
-
-func getMqttClientId() string {
-	return fmt.Sprintf("metamorphosis-%d", os.Getpid())
 }
 
 func NewTlsConfig(caFile, clientCertFile, clientKeyFile string, logger *log.Entry) *tls.Config {

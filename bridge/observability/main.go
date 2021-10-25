@@ -15,11 +15,8 @@ import (
 func (obs observability) mainloop() {
 	log.Debug("Observability worker is running")
 	for true {
-		select {
-		case msg := <-obs.channel:
-			obs.handleChannelMessage(msg)
-		}
-
+		msg := <-obs.channel
+		obs.handleChannelMessage(msg)
 	}
 }
 
@@ -49,6 +46,10 @@ func Run(params ObservabilityParams) *observability {
 	obs.kafkaErrors = promauto.With(reg).NewCounter(prometheus.CounterOpts{
 		Name: "kafka_errors",
 		Help: "No of errors encountered with Kafka",
+	})
+	obs.kafkaState = promauto.With(reg).NewGauge(prometheus.GaugeOpts{
+		Name: "kafka_state",
+		Help: "Kafka status (0 is OK)",
 	})
 	log.Debug("Obs entering mainloop")
 	go obs.mainloop()
@@ -84,6 +85,7 @@ func (obs *observability) Shutdown() {
 	obs.promReg.Unregister(obs.mqttErrors)   // So we must make sure that these don't collide.
 	obs.promReg.Unregister(obs.kafkaSent)
 	obs.promReg.Unregister(obs.kafkaSent)
+	obs.promReg.Unregister(obs.kafkaState)
 
 	obs.logger.Info("Shutting down obs HTTP server.")
 	timeoutCtx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
@@ -103,8 +105,10 @@ func (obs observability) handleChannelMessage(msg StatusMessage) {
 		obs.mqttErrors.Inc()
 	case KafkaSent:
 		obs.kafkaSent.Inc()
+		obs.kafkaState.Set(0)
 	case KafkaError:
 		obs.kafkaErrors.Inc()
+		obs.kafkaState.Set(1)
 	default:
 		obs.logger.Errorf("Observability: Unknown message recived")
 	}

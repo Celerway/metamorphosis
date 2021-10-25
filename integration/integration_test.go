@@ -105,24 +105,35 @@ func TestKafkaFailure(t *testing.T) {
 	go bridge.Run(bridgeCtx, mkBrigeParam(&wg, originMqttPort, originKafkaPort, defaultHealthPort, rTopic))
 	waitForBridge(defaultHealthPort)
 	publishMqttMessages(t, rTopic, noOfMessages, 0, originMqttPort) // Publish X messages
-	time.Sleep(2 * time.Second)                                     // Give kafka time to write stuff.
+	time.Sleep(time.Second)                                         // Give kafka time to write stuff.
 	fmt.Println("==== Kafka DISABLED === ")
 	// Enable failure. Each write will spend 700ms before failing.
-	failpoint.Enable("github.com/celerway/metamorphosis/bridge/kafka/writeFailure", "return(true)")
+	err := failpoint.Enable("github.com/celerway/metamorphosis/bridge/kafka/writeFailure", "return(true)")
+	if err != nil {
+		t.Errorf("Could not enable failpoint: %s", err)
+	}
 	// New batch of messages. Now kafka should be dead. note the offset.
 	publishMqttMessages(t, rTopic, noOfMessages, noOfMessages, originMqttPort) // Publish 2nd batch of messages
 	fmt.Println("==== Kafka RECOVERED === ")
-	failpoint.Disable("github.com/celerway/metamorphosis/bridge/kafka/writeFailure")
+	time.Sleep(time.Second)
+	verifyKafkaDown(t, defaultHealthPort)
+	err = failpoint.Disable("github.com/celerway/metamorphosis/bridge/kafka/writeFailure")
+	if err != nil {
+		t.Errorf("Could not enable failpoint: %s", err)
+	}
 	fmt.Println("==== Kafka SLOWED === ")
 	// Slow down kafka to X ms per write.
-	failpoint.Enable("github.com/celerway/metamorphosis/bridge/kafka/writeDelay", "return(50)")
+	err = failpoint.Enable("github.com/celerway/metamorphosis/bridge/kafka/writeDelay", "return(50)")
+	if err != nil {
+		t.Errorf("Could not enable failpoint: %s", err)
+	}
 	publishMqttMessages(t, rTopic, noOfMessages, noOfMessages*2, originMqttPort) // Publish 3rd batch of messages
 	time.Sleep(3 * time.Second)                                                  // Give it some time to write messages.
 	verifyKafkaMessages(t, rTopic, noOfMessages*3, originKafkaPort)              // Verify the messages.
 
-	err := failpoint.Disable("github.com/celerway/metamorphosis/bridge/kafka/writeDelay")
+	err = failpoint.Disable("github.com/celerway/metamorphosis/bridge/kafka/writeDelay")
 	if err != nil {
-		fmt.Println("Disable: ", err)
+		t.Errorf("Could not enable failpoint: %s", err)
 	}
 	fmt.Println("==== Kafka Good === ")
 

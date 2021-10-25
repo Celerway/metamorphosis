@@ -34,6 +34,7 @@ type observability struct {
 	mqttErrors   prometheus.Counter
 	kafkaSent    prometheus.Counter
 	kafkaErrors  prometheus.Counter
+	kafkaState   prometheus.Gauge
 	logger       *log.Entry
 	ready        bool
 	healthPort   int

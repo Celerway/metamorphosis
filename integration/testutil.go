@@ -17,7 +17,7 @@ import (
 	"time"
 )
 
-func verifyCounter(t *testing.T, name string, value float64, exptected int) {
+func promVerify(t *testing.T, name string, value float64, exptected int) {
 	if int(value) != exptected {
 		t.Errorf("Observed counter %s mismatch, expected %d, got %d (%f)",
 			name, exptected, int(value), value)
@@ -36,10 +36,26 @@ func verifyObsdata(t *testing.T, port, mqttMessages, kafkaMessages, mqttErrors, 
 	if err != nil {
 		t.Errorf("TextToMetricFamilies failed: %s", err)
 	}
-	verifyCounter(t, "mqtt_received", *mf["mqtt_received"].Metric[0].Counter.Value, mqttMessages)
-	verifyCounter(t, "kafka_sent", *mf["kafka_sent"].Metric[0].Counter.Value, kafkaMessages)
-	verifyCounter(t, "mqtt_errors", *mf["mqtt_errors"].Metric[0].Counter.Value, mqttErrors)
-	verifyCounter(t, "kafka_errors", *mf["kafka_errors"].Metric[0].Counter.Value, kafkaErrors)
+	promVerify(t, "mqtt_received", *mf["mqtt_received"].Metric[0].Counter.Value, mqttMessages)
+	promVerify(t, "kafka_sent", *mf["kafka_sent"].Metric[0].Counter.Value, kafkaMessages)
+	promVerify(t, "mqtt_errors", *mf["mqtt_errors"].Metric[0].Counter.Value, mqttErrors)
+	promVerify(t, "kafka_errors", *mf["kafka_errors"].Metric[0].Counter.Value, kafkaErrors)
+}
+
+func verifyKafkaDown(t *testing.T, port int) {
+	url := fmt.Sprintf("http://localhost:%d/metrics", port)
+	fmt.Printf("Quering metrics on %s\n", url)
+	resp, err := http.Get(url)
+	if err != nil {
+		t.Errorf("Could not get metrics (%s): %s", url, err)
+	}
+	var parser expfmt.TextParser
+	mf, err := parser.TextToMetricFamilies(resp.Body)
+	if err != nil {
+		t.Errorf("TextToMetricFamilies failed: %s", err)
+	}
+
+	promVerify(t, "kafka_state", *mf["kafka_state"].Metric[0].Gauge.Value, 1)
 }
 
 func mkBrigeParam(wg *sync.WaitGroup, mqttPort, kafkaPort, healthPort int, topic string) bridge.BridgeParams {
@@ -75,11 +91,6 @@ func waitForBridge(port int) {
 		time.Sleep(100 * time.Millisecond)
 	}
 	fmt.Printf("Bridge OK\n")
-}
-
-// Get a set of random ports for the proxy
-func getRandomPort() int {
-	return rand.Intn(10000) + 50000
 }
 
 func getRandomString(length int) string {
@@ -139,7 +150,7 @@ func verifyMessage(i int, m gokafka.Message, topic string) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("mqtt message json unmarshal: %s (message: %s)", err, kmsg.Content)
 	}
-
+	fmt.Printf("Actual message being verified: %v", actualMessage)
 	// Now check the inner message for content.
 	if actualMessage.Id != i {
 		return false, fmt.Errorf("kafka message has wrong ID, got %d, expected %d", actualMessage.Id, i)
@@ -170,7 +181,12 @@ func publishMqttMessages(t *testing.T, topic string, noMessages, offset, port in
 }
 
 func verifyKafkaMessages(t *testing.T, topic string, noOfMessages, port int) {
+	fmt.Println("============== verifyKafkaMessages =======")
 	client := getKafkaReader(port, topic)
+	err := client.SetOffset(0)
+	if err != nil {
+		t.Errorf("Setting offset: %s", err)
+	}
 	noOfValidMessages := 0
 
 	for noOfValidMessages < noOfMessages {
@@ -178,10 +194,17 @@ func verifyKafkaMessages(t *testing.T, topic string, noOfMessages, port int) {
 		msg, err := client.ReadMessage(context.Background())
 		if err != nil {
 			t.Errorf("Reading kafka message: %s", err)
+
 		}
 		valid, err := verifyMessage(noOfValidMessages, msg, topic)
 		if err != nil {
 			t.Errorf("Verifying kafka message: %s", err)
+		} else {
+			if valid == false {
+				fmt.Println("Test message observed (verifymessage is false, no error)")
+			} else {
+				fmt.Println("Verified message OK")
+			}
 		}
 		if valid {
 			fmt.Printf("Message %d is valid\n", noOfValidMessages)

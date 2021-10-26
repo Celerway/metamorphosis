@@ -103,6 +103,14 @@ Since generting faults is such a royal pain we inject faults using [failpoint](h
 Before running the tests run `failpoint-ctl enable`. Do not commit code without disabling the failpoints, 
 `failpoint-ctl disable` will disable the failpoints again.
 
+Todo: Would be nice if the tests could make sure failpoints are enabled. If not, the tests will fail, which can cause
+confusion.
+
+### Todo: Use a docker container for mosquitto
+
+Currently, we rely on mosquitto being locally installed. Would be nice if we could fetch it with docker, like we do 
+for Red Panda.
+
 ### Todo: Tls against Kafka
 
 We don't need this ourselves, but PRs are welcome. Should be too hard. #goodfirsttask

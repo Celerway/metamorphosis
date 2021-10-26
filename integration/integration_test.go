@@ -32,7 +32,15 @@ func TestMain(m *testing.M) {
 	log.SetFormatter(&f)
 	log.Debug("Log level set")
 	rand.Seed(time.Now().Unix())
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	ctx, cancel := context.WithCancel(context.Background())
+	startKafka(ctx, &wg)
+	startMqtt(ctx)
+	waitForKafka()
 	ret := m.Run() // Run the tests.
+	cancel()
+	wg.Wait()
 	os.Exit(ret)
 
 }
@@ -49,7 +57,6 @@ func TestDummy(t *testing.T) {
 		t.Errorf("Kafka topic (list) stdout: %s stderr: %s err: %s", stdout.String(), stderr.String(), err)
 	}
 	log.Debugf("Stdout: %s, \nStderr: %s", stdout.String(), stderr.String())
-
 }
 
 /*
@@ -61,7 +68,7 @@ func TestDummy(t *testing.T) {
          - see that they arrive in Kafka
          - verify obs data
 */
-func TestBasic(t *testing.T) {
+func RunBasic(t *testing.T) {
 
 	fmt.Println("Testing basic stuff")
 	rootCtx := context.Background()
@@ -69,31 +76,24 @@ func TestBasic(t *testing.T) {
 	kafkaTopic(t, "create", rTopic)
 	bridgeCtx, bridgeCancel := context.WithCancel(rootCtx)
 	wg := sync.WaitGroup{}
-	go bridge.Run(bridgeCtx, mkBrigeParam(&wg, originMqttPort, originKafkaPort, defaultHealthPort, rTopic))
+	wg.Add(1)
+	go bridge.Run(bridgeCtx, &wg, mkBrigeParam(originMqttPort, originKafkaPort, defaultHealthPort, rTopic))
 	waitForBridge(defaultHealthPort)
-	publishMqttMessages(t, rTopic, noOfMessages, 0, originMqttPort) // Publish messages
-	verifyKafkaMessages(t, rTopic, noOfMessages, originKafkaPort)   // Verify the messages.
+	publishMqttMessages(t, rTopic, 1, 0, originMqttPort) // Publish messages
+	verifyKafkaMessages(t, rTopic, 1, originKafkaPort)   // Verify the messages.
 	// +1 for the kafka messages. (There is a test message, you know)
-	verifyObsdata(t, defaultHealthPort, noOfMessages, noOfMessages+1, 0, 0)
+	verifyObsdata(t, defaultHealthPort, 1, 1+1, 0, 0)
 	bridgeCancel()
 	kafkaTopic(t, "delete", rTopic)
 	wg.Wait()
 }
 
-/*
-   	plan:
-         - create a topic in Kafka (random name)
-         - spin up the proxy (with two random ports)
-         - spin up bridge (remember to connect to the ports)
-         - push 100 messages through the MQTT
-         - cancel the proxy
-         - push 100 messages through the MQTT broker
-         - wait a while (11 seconds)
-         - start the proxy again
-         - wait another while (10 seconds)
-         - see that they have all arrive in Kafka
-         - verify obs data
-*/
+// TestBasic is the most basic test. It fires up the bridge and pushes a messages through it.
+// Run it twice to make sure we shut down cleanly.
+func TestBasic(t *testing.T) {
+	RunBasic(t)
+	RunBasic(t)
+}
 
 func TestKafkaFailure(t *testing.T) {
 	fmt.Println("TestKafkaFailure")
@@ -102,10 +102,11 @@ func TestKafkaFailure(t *testing.T) {
 	kafkaTopic(t, "create", rTopic)
 	bridgeCtx, bridgeCancel := context.WithCancel(rootCtx)
 	wg := sync.WaitGroup{}
-	go bridge.Run(bridgeCtx, mkBrigeParam(&wg, originMqttPort, originKafkaPort, defaultHealthPort, rTopic))
+	wg.Add(1)
+	go bridge.Run(bridgeCtx, &wg, mkBrigeParam(originMqttPort, originKafkaPort, defaultHealthPort, rTopic))
 	waitForBridge(defaultHealthPort)
 	publishMqttMessages(t, rTopic, noOfMessages, 0, originMqttPort) // Publish X messages
-	time.Sleep(time.Second)                                         // Give kafka time to write stuff.
+	time.Sleep(time.Second * 3)                                     // Give kafka time to write stuff.
 	fmt.Println("==== Kafka DISABLED === ")
 	// Enable failure. Each write will spend 700ms before failing.
 	err := failpoint.Enable("github.com/celerway/metamorphosis/bridge/kafka/writeFailure", "return(true)")
@@ -145,17 +146,23 @@ func TestKafkaFailure(t *testing.T) {
 }
 
 func TestMqttFailure(t *testing.T) {
-	fmt.Println("Testing kafka failure")
-	/*
-		plan:
-			 - create a topic in Kafka (random name)
-			 - spin up the proxy (with two random ports)
-			 - spin up bridge (remember to connect to the ports)
-			 - push 100 messages through the MQTT
-			 - SIGINT the proxy so it shuts down
-			 - spin up another proxy on the same ports
-			 - push 100 messages through the MQTT broker
-			 - see that they have all arrive in Kafka
-			 - verify obs data
-	*/
+	fmt.Println("Testing MQTT failure")
+	rTopic := getRandomString(12)
+	kafkaTopic(t, "create", rTopic)
+	time.Sleep(time.Second)
+	rootCtx := context.Background()
+	bridgeCtx, bridgeCancel := context.WithCancel(rootCtx)
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go bridge.Run(bridgeCtx, &wg, mkBrigeParam(originMqttPort, originKafkaPort, defaultHealthPort, rTopic))
+	waitForBridge(defaultHealthPort)
+
+	publishMqttMessages(t, rTopic, noOfMessages, 0, originMqttPort) // Publish X messages
+	restartMqtt()
+	time.Sleep(300 * time.Millisecond)                                         // Give the bridge some time to reconnect, so we're sure we don't lose messages.
+	publishMqttMessages(t, rTopic, noOfMessages, noOfMessages, originMqttPort) // Publish X messages
+	verifyKafkaMessages(t, rTopic, noOfMessages*2, originKafkaPort)            // Verify the messages.
+	bridgeCancel()
+	wg.Wait()
+	kafkaTopic(t, "delete", rTopic)
 }

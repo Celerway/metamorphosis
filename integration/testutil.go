@@ -12,7 +12,6 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
-	"sync"
 	"testing"
 	"time"
 )
@@ -58,19 +57,19 @@ func verifyKafkaDown(t *testing.T, port int) {
 	promVerify(t, "kafka_state", *mf["kafka_state"].Metric[0].Gauge.Value, 1)
 }
 
-func mkBrigeParam(wg *sync.WaitGroup, mqttPort, kafkaPort, healthPort int, topic string) bridge.BridgeParams {
+func mkBrigeParam(mqttPort, kafkaPort, healthPort int, topic string) bridge.BridgeParams {
 	return bridge.BridgeParams{
 		MqttBroker:         "localhost",
 		MqttPort:           mqttPort,
 		MqttTopic:          topic,
 		MqttTls:            false,
+		MqttClientId:       "metamorphosis",
 		KafkaBroker:        "127.0.0.1",
 		KafkaPort:          kafkaPort,
 		KafkaTopic:         topic,
 		KafkaWorkers:       1,
 		HealthPort:         healthPort,
 		KafkaRetryInterval: 3 * time.Second,
-		MainWaitGroup:      wg,
 	}
 
 }
@@ -191,10 +190,12 @@ func verifyKafkaMessages(t *testing.T, topic string, noOfMessages, port int) {
 
 	for noOfValidMessages < noOfMessages {
 		fmt.Printf("kafka: reading message (expected id %d)\n", noOfValidMessages)
-		msg, err := client.ReadMessage(context.Background())
+		cTimeout, cancelTimeout := context.WithTimeout(context.Background(), time.Second)
+		msg, err := client.ReadMessage(cTimeout)
+		cancelTimeout()
 		if err != nil {
 			t.Errorf("Reading kafka message: %s", err)
-
+			return
 		}
 		valid, err := verifyMessage(noOfValidMessages, msg, topic)
 		if err != nil {

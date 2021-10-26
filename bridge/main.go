@@ -19,7 +19,7 @@ import (
 
 const channelSize = 100
 
-func Run(ctx context.Context, params BridgeParams) {
+func Run(ctx context.Context, bridgeWaitGroup *sync.WaitGroup, params BridgeParams) {
 	// params.MainWaitGroup.Add(1) // allows the caller to wait for clean exit.
 	var wg sync.WaitGroup // wg for children.
 	var tlsConfig *tls.Config
@@ -78,8 +78,11 @@ func Run(ctx context.Context, params BridgeParams) {
 	// Spin off a goroutine that will wait for SIGNALs and cancel the context.
 	// If we wanna do something on a regular basis (log stats or whatnot)
 	// this is a good place.
+
+	// Set up a waitgroup for this:
+	wg.Add(1)
+
 	go func() {
-		wg.Add(1)
 		br.logger.Debug("Signal listening goroutine is running.")
 		select {
 		case <-ctx.Done():
@@ -88,22 +91,22 @@ func Run(ctx context.Context, params BridgeParams) {
 			time.Sleep(3 * time.Second) // This should be enough to make sure Kafka is flushed out.
 			kafkaCancel()
 			obs.Shutdown()
-			wg.Done()
+			wg.Done() // Signal the waitgroup
 			return
 		case <-sigChan:
 			br.logger.Warn("Signal caught. Initiating shutdown.")
 			mqttCancel()
-			time.Sleep(1 * time.Second) // This should be enough to make sure Kafka is flushed out.
+			time.Sleep(3 * time.Second) // This should be enough to make sure Kafka is flushed out.
 			kafkaCancel()
 			obs.Shutdown()
-			wg.Done()
+			wg.Done() // Signal the waitgroup
 			return
 		}
 	}()
-	br.logger.Trace("Main goroutine waiting for bridge shutdown.")
-	wg.Wait()
-	br.logger.Infof("Bridge exiting")
-	params.MainWaitGroup.Done() // main group
+	br.logger.Debug("Main goroutine waiting for bridge shutdown.")
+	wg.Wait() // Block and for us to shut down completely.
+	br.logger.Warn("Bridge exiting")
+	bridgeWaitGroup.Done() // main group passed as parameter to Run()
 }
 
 func NewTlsConfig(caFile, clientCertFile, clientKeyFile string, logger *log.Entry) *tls.Config {

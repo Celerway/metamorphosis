@@ -82,7 +82,6 @@ func main() {
 		CheckSet(mqttCaClientKeyFile, "MQTT_CLIENT_KEY", "tls is enabled")
 	}
 
-	wg := sync.WaitGroup{}
 	runConfig := bridge.BridgeParams{
 		MqttBroker:         mqttBroker,
 		MqttPort:           mqttPort,
@@ -98,12 +97,12 @@ func main() {
 		KafkaWorkers:       kafkaWorkers,
 		KafkaRetryInterval: time.Duration(kafkaRetryInterval) * time.Second,
 		HealthPort:         healthPort,
-		MainWaitGroup:      &wg,
 	}
 	log.Infof("Startup options: %v", runConfig)
 	log.Debug("Starting bridge")
-	runConfig.MainWaitGroup.Add(1)
-	go bridge.Run(context.Background(), runConfig)
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go bridge.Run(context.Background(), &wg, runConfig)
 	wg.Wait()
 	log.Debug("Waiting over. Exiting.")
 

@@ -4,7 +4,6 @@ import (
 	"github.com/celerway/metamorphosis/bridge/kafka"
 	"github.com/celerway/metamorphosis/bridge/mqtt"
 	log "github.com/sirupsen/logrus"
-	"sync"
 	"time"
 )
 
@@ -22,7 +21,6 @@ type BridgeParams struct {
 	KafkaWorkers       int
 	HealthPort         int
 	KafkaRetryInterval time.Duration
-	MainWaitGroup      *sync.WaitGroup
 	MqttClientId       string
 }
 

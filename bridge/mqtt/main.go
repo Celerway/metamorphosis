@@ -102,12 +102,23 @@ func (client *mqttClient) handleDisconnect(_ paho.Client, err error) {
 
 func (client mqttClient) unsubscribe() {
 	token := client.paho.Unsubscribe(client.topic)
-	token.Wait()
-	client.logger.Infof("Unsubscribed from topic '%s'", client.topic)
+	if token.Wait() && token.Error() != nil {
+		client.logger.Errorf("Could not unsubscribe from %s:  %s", client.topic, token.Error())
+	} else {
+		client.logger.Infof("Unsubscribed from topic '%s'", client.topic)
+	}
 }
 func (client mqttClient) subscribe() {
-	token := client.paho.Subscribe(client.topic, 1, client.messageHandler)
-	token.Wait()
+	success := false
+	for !success {
+		token := client.paho.Subscribe(client.topic, 1, client.messageHandler)
+		if token.Wait() && token.Error() != nil {
+			client.logger.Errorf("Could not subscribe to '%s':  %s", client.topic, token.Error())
+			time.Sleep(100 * time.Millisecond) // Sleep some between attempts
+		} else {
+			success = true
+		}
+	}
 	client.logger.Infof("Subscribed to topic '%s'", client.topic)
 }
 

@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.1.8](https://github.com/Celerway/metamorphosis/compare/v0.1.7...v0.1.8) (2021-10-28)
+
+
+### Bug Fixes
+
+* Errors in subscribe and unsubscribe are now logged. ([f99e934](https://github.com/Celerway/metamorphosis/commit/f99e9340f364424142afad36def2b066704a474d))
+
 ### [0.1.7](https://github.com/Celerway/metamorphosis/compare/v0.1.6...v0.1.7) (2021-10-26)
 
 ### [0.1.6](https://github.com/Celerway/metamorphosis/compare/v0.1.5...v0.1.6) (2021-10-19)

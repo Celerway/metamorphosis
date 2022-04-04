@@ -97,7 +97,6 @@ func (client mqttClient) handleConnect(_ paho.Client) {
 func (client *mqttClient) handleDisconnect(_ paho.Client, err error) {
 	client.logger.Errorf("handleDisconnect invoked with error: %s", err)
 	client.logger.Info("Reconnecting to broker.")
-	client.connect()
 }
 
 func (client mqttClient) unsubscribe() {

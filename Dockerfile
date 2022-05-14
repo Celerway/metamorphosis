@@ -1,4 +1,4 @@
-FROM golang:1.16-alpine AS build
+FROM golang:1.18-alpine AS build
 ENV CGO_ENABLED=0
 ENV GOOS=linux
 ENV DOCKER_BUILDKIT=1

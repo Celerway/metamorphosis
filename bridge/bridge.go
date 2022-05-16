@@ -15,11 +15,8 @@ func (br bridge) run() {
 // Note that this code doesn't used contexts or waitgroups.
 // When we exit there is no cleanup to be done.
 func (br bridge) mainloop() {
-	for true {
-		select {
-		case chMsg := <-br.mqttCh:
-			br.glueMsgHandler(chMsg)
-		}
+	for msg := range br.mqttCh {
+		br.glueMsgHandler(msg)
 	}
 }
 

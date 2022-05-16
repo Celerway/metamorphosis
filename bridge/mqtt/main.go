@@ -111,11 +111,17 @@ func (client mqttClient) unsubscribe() {
 func (client mqttClient) subscribe() {
 	success := false
 	for !success {
+		client.logger.Tracef("Issuing subscribe to topic '%s'", client.topic)
 		token := client.paho.Subscribe(client.topic, 1, client.messageHandler)
-		if token.Wait() && token.Error() != nil {
+		res := token.Wait()
+		// sToken, ok := token.(paho.SubscribeToken)
+
+		client.logger.Tracef("token.Wait is now: %v", res)
+		if token.Error() != nil {
 			client.logger.Errorf("Could not subscribe to '%s':  %s", client.topic, token.Error())
 			time.Sleep(100 * time.Millisecond) // Sleep some between attempts
 		} else {
+			client.logger.Infof("successfully subcribed to '%s", client.topic)
 			success = true
 		}
 	}

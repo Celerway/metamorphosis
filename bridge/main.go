@@ -19,7 +19,7 @@ import (
 
 const channelSize = 100
 
-func Run(ctx context.Context, bridgeWaitGroup *sync.WaitGroup, params BridgeParams) {
+func Run(ctx context.Context, params BridgeParams) {
 	// params.MainWaitGroup.Add(1) // allows the caller to wait for clean exit.
 	var wg sync.WaitGroup // wg for children.
 	var tlsConfig *tls.Config
@@ -66,10 +66,8 @@ func Run(ctx context.Context, bridgeWaitGroup *sync.WaitGroup, params BridgePara
 	// Start the goroutines that do the work.
 	obs := observability.Run(obsParams) // Fire up obs.
 	br.run()                            // Start the bridge so MQTT can send messages to Kafka.
-	for i := 1; i < params.KafkaWorkers+1; i++ {
-		kafka.Run(kafkaCtx, kafkaParams, i) // start the writer(s).
-	}
-	mqtt.Run(mqttCtx, mqttParams) // Then connect to MQTT
+	kafka.Run(kafkaCtx, kafkaParams)    // start the writer(s).
+	mqtt.Run(mqttCtx, mqttParams)       // Then connect to MQTT
 	obs.Ready()
 	log.Debug("Obs marked as READY")
 
@@ -106,7 +104,6 @@ func Run(ctx context.Context, bridgeWaitGroup *sync.WaitGroup, params BridgePara
 	br.logger.Debug("Main goroutine waiting for bridge shutdown.")
 	wg.Wait() // Block and for us to shut down completely.
 	br.logger.Warn("Bridge exiting")
-	bridgeWaitGroup.Done() // main group passed as parameter to Run()
 }
 
 func NewTlsConfig(caFile, clientCertFile, clientKeyFile string, logger *log.Entry) *tls.Config {

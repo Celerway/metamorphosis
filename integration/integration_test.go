@@ -77,7 +77,11 @@ func RunBasic(t *testing.T) {
 	bridgeCtx, bridgeCancel := context.WithCancel(rootCtx)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
-	go bridge.Run(bridgeCtx, &wg, mkBrigeParam(originMqttPort, originKafkaPort, defaultHealthPort, rTopic))
+	go func() {
+		defer wg.Done()
+		bridge.Run(bridgeCtx, mkBrigeParam(originMqttPort, originKafkaPort, defaultHealthPort, rTopic))
+	}()
+
 	waitForBridge(defaultHealthPort)
 	publishMqttMessages(t, rTopic, 1, 0, originMqttPort) // Publish messages
 	verifyKafkaMessages(t, rTopic, 1, originKafkaPort)   // Verify the messages.
@@ -103,7 +107,11 @@ func TestKafkaFailure(t *testing.T) {
 	bridgeCtx, bridgeCancel := context.WithCancel(rootCtx)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
-	go bridge.Run(bridgeCtx, &wg, mkBrigeParam(originMqttPort, originKafkaPort, defaultHealthPort, rTopic))
+	go func() {
+		defer wg.Done()
+		bridge.Run(bridgeCtx, mkBrigeParam(originMqttPort, originKafkaPort, defaultHealthPort, rTopic))
+	}()
+
 	waitForBridge(defaultHealthPort)
 	publishMqttMessages(t, rTopic, noOfMessages, 0, originMqttPort) // Publish X messages
 	time.Sleep(time.Second * 3)                                     // Give kafka time to write stuff.
@@ -154,9 +162,11 @@ func TestMqttFailure(t *testing.T) {
 	bridgeCtx, bridgeCancel := context.WithCancel(rootCtx)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
-	go bridge.Run(bridgeCtx, &wg, mkBrigeParam(originMqttPort, originKafkaPort, defaultHealthPort, rTopic))
+	go func() {
+		defer wg.Done()
+		bridge.Run(bridgeCtx, mkBrigeParam(originMqttPort, originKafkaPort, defaultHealthPort, rTopic))
+	}()
 	waitForBridge(defaultHealthPort)
-
 	publishMqttMessages(t, rTopic, noOfMessages, 0, originMqttPort) // Publish X messages
 	restartMqtt()
 	time.Sleep(300 * time.Millisecond)                                         // Give the bridge some time to reconnect, so we're sure we don't lose messages.

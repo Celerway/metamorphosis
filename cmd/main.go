@@ -102,7 +102,10 @@ func main() {
 	log.Debug("Starting bridge")
 	wg := sync.WaitGroup{}
 	wg.Add(1)
-	go bridge.Run(context.Background(), &wg, runConfig)
+	go func() {
+		defer wg.Done()
+		bridge.Run(context.Background(), runConfig)
+	}()
 	wg.Wait()
 	log.Debug("Waiting over. Exiting.")
 

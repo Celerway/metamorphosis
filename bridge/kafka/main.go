@@ -13,7 +13,7 @@ import (
 )
 
 // Run Constructor. Sort of.
-func Run(ctx context.Context, params KafkaParams, id int) {
+func Run(ctx context.Context, params KafkaParams) {
 	// This should be fairly easy to test in case we wanna mock Kafka.
 	client := kafkaClient{
 		broker:        params.Broker,
@@ -26,7 +26,6 @@ func Run(ctx context.Context, params KafkaParams, id int) {
 		retryInterval: params.RetryInterval,
 		logger: log.WithFields(log.Fields{
 			"module": "kafka",
-			"worker": fmt.Sprint(id),
 		}),
 	}
 	client.writer = getWriter(client) // Give the writer the context aware logger and store it in the struct.

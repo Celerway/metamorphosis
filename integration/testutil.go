@@ -57,8 +57,8 @@ func verifyKafkaDown(t *testing.T, port int) {
 	promVerify(t, "kafka_state", *mf["kafka_state"].Metric[0].Gauge.Value, 1)
 }
 
-func mkBrigeParam(mqttPort, kafkaPort, healthPort int, topic string) bridge.BridgeParams {
-	return bridge.BridgeParams{
+func mkBrigeParam(mqttPort, kafkaPort, healthPort int, topic string) bridge.Params {
+	return bridge.Params{
 		MqttBroker:         "localhost",
 		MqttPort:           mqttPort,
 		MqttTopic:          topic,

@@ -10,17 +10,16 @@ import (
 	"time"
 )
 
-func Run(ctx context.Context, params MqttParams) {
+func Run(ctx context.Context, params Params) {
 	log.Debugf("Starting MQTT Worker.")
 	log.Debugf("Broker: %s:%d (tls: %v)", params.Broker, params.Port, params.Tls)
-	client := mqttClient{
+	client := client{
 		broker:     params.Broker,
 		port:       params.Port,
 		topic:      params.Topic,
 		clientId:   params.Clientid,
 		tls:        params.Tls,
 		ch:         params.Channel,
-		waitGroup:  params.WaitGroup,
 		obsChannel: params.ObsChannel,
 		logger:     log.WithFields(log.Fields{"module": "mqtt"}),
 	}
@@ -40,33 +39,29 @@ func Run(ctx context.Context, params MqttParams) {
 	client.paho = pahoClient
 	client.connect() // blocks and aborts on failure.
 	client.logger.Info("Starting MQTT client worker")
-	go client.mainloop(ctx)
+	client.mainloop(ctx)
 }
 
 // mainloop
 // This is a goroutine. When you return it dies.
 // Connects to the MQTT broker, subscribes and processes messages.
 // All the works happens in the event handler.
-func (client mqttClient) mainloop(ctx context.Context) {
-	client.waitGroup.Add(1)
+func (client client) mainloop(ctx context.Context) {
 	// Here we start blocking the goroutine and wait for shutdown.
 	// If we need to keep track of something we can wrap this in a loop
-	select {
-	case <-ctx.Done():
-		client.logger.Info("MQTT client context is cancelled. Shutting down.")
-		client.unsubscribe()
-		time.Sleep(100 * time.Millisecond)
-		client.paho.Disconnect(100)
-		client.logger.Debug("MQTT disconnected")
-	}
+	<-ctx.Done()
+	client.logger.Info("MQTT client context is cancelled. Shutting down.")
+	client.unsubscribe()
+	time.Sleep(100 * time.Millisecond)
+	client.paho.Disconnect(100)
+	client.logger.Debug("MQTT disconnected")
 
-	client.waitGroup.Done()
 	client.logger.Info("MQTT client exiting")
 }
 
 // connect
 // Connects to the broker. Blocks until the connection is established.
-func (client *mqttClient) connect() {
+func (client *client) connect() {
 	const connectionAttempts = 10
 	connected := false
 	attempts := 0
@@ -90,17 +85,17 @@ func (client *mqttClient) connect() {
 	}
 	client.logger.Infof("Worker '%v' connected to MQTT %s:%d", client.clientId, client.broker, client.port)
 }
-func (client mqttClient) handleConnect(_ paho.Client) {
+func (client client) handleConnect(_ paho.Client) {
 	client.logger.Info("Connection to MQTT broker established")
 }
 
-func (client *mqttClient) handleDisconnect(_ paho.Client, err error) {
+func (client *client) handleDisconnect(_ paho.Client, err error) {
 	client.logger.Errorf("handleDisconnect invoked with error: %s", err)
 	client.logger.Info("Reconnecting to broker.")
 	client.connect()
 }
 
-func (client mqttClient) unsubscribe() {
+func (client client) unsubscribe() {
 	token := client.paho.Unsubscribe(client.topic)
 	if token.Wait() && token.Error() != nil {
 		client.logger.Errorf("Could not unsubscribe from %s:  %s", client.topic, token.Error())
@@ -108,7 +103,7 @@ func (client mqttClient) unsubscribe() {
 		client.logger.Infof("Unsubscribed from topic '%s'", client.topic)
 	}
 }
-func (client mqttClient) subscribe() {
+func (client client) subscribe() {
 	success := false
 	for !success {
 		client.logger.Tracef("Issuing subscribe to topic '%s'", client.topic)
@@ -128,9 +123,9 @@ func (client mqttClient) subscribe() {
 	client.logger.Infof("Subscribed to topic '%s'", client.topic)
 }
 
-func (client mqttClient) messageHandler(_ paho.Client, msg paho.Message) {
+func (client client) messageHandler(_ paho.Client, msg paho.Message) {
 	client.logger.Tracef("Got message on topic %s. Message: %s", msg.Topic(), string(msg.Payload()))
-	chMsg := MqttChannelMessage{
+	chMsg := ChannelMessage{
 		Topic:   msg.Topic(),
 		Content: msg.Payload(),
 	}

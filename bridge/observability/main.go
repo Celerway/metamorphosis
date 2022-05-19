@@ -12,15 +12,18 @@ import (
 	"time"
 )
 
-func (obs observability) mainloop() {
+func (obs observability) Run(ctx context.Context) {
 	log.Debug("Observability worker is running")
-	for true {
-		msg := <-obs.channel
+	go func() {
+		<-ctx.Done()
+		close(obs.channel)
+	}()
+	for msg := range obs.channel {
 		obs.handleChannelMessage(msg)
 	}
 }
 
-func Run(params ObservabilityParams) *observability {
+func Initialize(params ObservabilityParams) *observability {
 	reg := prometheus.NewRegistry()
 
 	obs := observability{
@@ -52,7 +55,7 @@ func Run(params ObservabilityParams) *observability {
 		Help: "Kafka status (0 is OK)",
 	})
 	log.Debug("Obs entering mainloop")
-	go obs.mainloop()
+
 	log.Debug("Obs starting http server")
 	obs.runHttpServer()
 	return &obs // Return the struct so the bridge can adjust the health status.
@@ -79,7 +82,7 @@ func (obs *observability) runHttpServer() {
 	}()
 }
 
-func (obs *observability) Shutdown() {
+func (obs *observability) Cleanup() {
 	obs.logger.Info("De-registering prometheus counters")
 	obs.promReg.Unregister(obs.mqttReceived) // During testing we run multiple bridges in the same binary.
 	obs.promReg.Unregister(obs.mqttErrors)   // So we must make sure that these don't collide.

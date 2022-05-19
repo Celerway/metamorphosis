@@ -8,6 +8,7 @@ import (
 	"github.com/joho/godotenv"
 	log "github.com/sirupsen/logrus"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
 	"sync"
@@ -82,7 +83,7 @@ func main() {
 		CheckSet(mqttCaClientKeyFile, "MQTT_CLIENT_KEY", "tls is enabled")
 	}
 
-	runConfig := bridge.BridgeParams{
+	runConfig := bridge.Params{
 		MqttBroker:         mqttBroker,
 		MqttPort:           mqttPort,
 		MqttTopic:          mqttTopic,
@@ -100,11 +101,13 @@ func main() {
 	}
 	log.Infof("Startup options: %v", runConfig)
 	log.Debug("Starting bridge")
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer cancel()
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		bridge.Run(context.Background(), runConfig)
+		bridge.Run(ctx, runConfig)
 	}()
 	wg.Wait()
 	log.Debug("Waiting over. Exiting.")

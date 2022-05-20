@@ -10,35 +10,31 @@ import (
 	"github.com/celerway/metamorphosis/bridge/observability"
 	log "github.com/sirupsen/logrus"
 	"io/ioutil"
-	"os"
-	"os/signal"
 	"sync"
-	"syscall"
 	"time"
 )
 
 const channelSize = 100
 
-func Run(ctx context.Context, bridgeWaitGroup *sync.WaitGroup, params BridgeParams) {
+func Run(ctx context.Context, params Params) {
 	// params.MainWaitGroup.Add(1) // allows the caller to wait for clean exit.
 	var wg sync.WaitGroup // wg for children.
 	var tlsConfig *tls.Config
 	// In order to avoid hanging when we shut down we shutdown things in a certain order. So we use two contexts
 	// to do this.
-	mqttCtx, mqttCancel := context.WithCancel(ctx)   // Mqtt client. Shutdown first.
-	kafkaCtx, kafkaCancel := context.WithCancel(ctx) // Kafka, shutdown after mqtt.
-
+	mqttCtx, mqttCancel := context.WithCancel(context.Background())   // Mqtt client. Cleanup first.
+	kafkaCtx, kafkaCancel := context.WithCancel(context.Background()) // Kafka, shutdown after mqtt.
+	obsCtx, obsCancel := context.WithCancel(context.Background())     // obs, needs to be shutdown last to avoid deadlocks.
 	obsChan := observability.GetChannel(channelSize)
-
 	br := bridge{
 		mqttCh:  make(mqtt.MessageChannel, channelSize),
-		kafkaCh: make(kafka.MessageChannel, channelSize),
+		kafkaCh: make(kafka.MessageChan, channelSize),
 		logger:  log.WithFields(log.Fields{"module": "bridge"}),
 	}
 	if params.MqttTls {
 		tlsConfig = NewTlsConfig(params.TlsRootCrtFile, params.MqttClientCertFile, params.MqttClientKeyFile, br.logger)
 	}
-	mqttParams := mqtt.MqttParams{
+	mqttParams := mqtt.Params{
 		TlsConfig:  tlsConfig,
 		Broker:     params.MqttBroker,
 		Port:       params.MqttPort,
@@ -46,67 +42,68 @@ func Run(ctx context.Context, bridgeWaitGroup *sync.WaitGroup, params BridgePara
 		Tls:        params.MqttTls,
 		Clientid:   params.MqttClientId,
 		Channel:    br.mqttCh,
-		WaitGroup:  &wg,
 		ObsChannel: obsChan,
 	}
-	kafkaParams := kafka.KafkaParams{
+	kafkaParams := kafka.Params{
 		Broker:        params.KafkaBroker,
 		Port:          params.KafkaPort,
 		Channel:       br.kafkaCh,
-		WaitGroup:     &wg,
 		Topic:         params.KafkaTopic,
 		ObsChannel:    obsChan,
 		RetryInterval: params.KafkaRetryInterval,
+		Interval:      params.KafkaInterval,
+		BatchSize:     params.KafkaBatchSize,
+		MaxBatchSize:  params.KafkaMaxBatchSize,
 	}
-	obsParams := observability.ObservabilityParams{
+	obsParams := observability.Params{
 		Channel:    obsChan,
 		HealthPort: params.HealthPort,
 		WaitGroup:  &wg,
 	}
 	// Start the goroutines that do the work.
-	obs := observability.Run(obsParams) // Fire up obs.
-	br.run()                            // Start the bridge so MQTT can send messages to Kafka.
-	for i := 1; i < params.KafkaWorkers+1; i++ {
-		kafka.Run(kafkaCtx, kafkaParams, i) // start the writer(s).
-	}
-	mqtt.Run(mqttCtx, mqttParams) // Then connect to MQTT
-	obs.Ready()
-	log.Debug("Obs marked as READY")
+	obs := observability.Initialize(obsParams) // Fire up obs.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		obs.Run(obsCtx)
+	}()
 
-	sigChan := make(chan os.Signal)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		br.mainloop()
+	}()
+	kafkaWorker := kafka.Initialize(kafkaParams)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		err := kafkaWorker.Run(kafkaCtx)
+		if err != nil {
+			log.Fatalf("Could not initialize kafka worker: %s", err)
+		}
+	}()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		mqtt.Run(mqttCtx, mqttParams) // Then connect to MQTT
+	}()
+	obs.Ready()
+
 	// Spin off a goroutine that will wait for SIGNALs and cancel the context.
 	// If we wanna do something on a regular basis (log stats or whatnot)
 	// this is a good place.
 
-	// Set up a waitgroup for this:
-	wg.Add(1)
-
-	go func() {
-		br.logger.Debug("Signal listening goroutine is running.")
-		select {
-		case <-ctx.Done():
-			br.logger.Warn("Context cancelled. Initiating shutdown.")
-			mqttCancel()
-			time.Sleep(3 * time.Second) // This should be enough to make sure Kafka is flushed out.
-			kafkaCancel()
-			obs.Shutdown()
-			wg.Done() // Signal the waitgroup
-			return
-		case <-sigChan:
-			br.logger.Warn("Signal caught. Initiating shutdown.")
-			mqttCancel()
-			time.Sleep(3 * time.Second) // This should be enough to make sure Kafka is flushed out.
-			kafkaCancel()
-			obs.Shutdown()
-			wg.Done() // Signal the waitgroup
-			return
-		}
-	}()
-	br.logger.Debug("Main goroutine waiting for bridge shutdown.")
+	<-ctx.Done()
+	br.logger.Warn("Context cancelled. Initiating shutdown.")
+	mqttCancel()
+	time.Sleep(time.Second)
+	close(br.mqttCh)            // Closing the channel will cause the mainloop to exit.
+	time.Sleep(3 * time.Second) // This should be enough to make sure Kafka is flushed out.
+	kafkaCancel()
+	obsCancel()
+	obs.Cleanup()
 	wg.Wait() // Block and for us to shut down completely.
 	br.logger.Warn("Bridge exiting")
-	bridgeWaitGroup.Done() // main group passed as parameter to Run()
 }
 
 func NewTlsConfig(caFile, clientCertFile, clientKeyFile string, logger *log.Entry) *tls.Config {
@@ -133,7 +130,7 @@ func NewTlsConfig(caFile, clientCertFile, clientKeyFile string, logger *log.Entr
 	}
 }
 
-func (br BridgeParams) String() string {
+func (br Params) String() string {
 	jsonBytes, _ := json.MarshalIndent(br, "", "  ")
 	return string(jsonBytes)
 }

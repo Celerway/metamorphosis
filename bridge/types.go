@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-type BridgeParams struct {
+type Params struct {
 	MqttBroker         string
 	MqttTls            bool
 	MqttPort           int
@@ -22,10 +22,13 @@ type BridgeParams struct {
 	HealthPort         int
 	KafkaRetryInterval time.Duration
 	MqttClientId       string
+	KafkaBatchSize     int
+	KafkaMaxBatchSize  int
+	KafkaInterval      time.Duration
 }
 
 type bridge struct {
 	mqttCh  mqtt.MessageChannel
-	kafkaCh kafka.MessageChannel
+	kafkaCh kafka.MessageChan
 	logger  *log.Entry
 }

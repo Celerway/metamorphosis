@@ -8,6 +8,7 @@ import (
 	"github.com/joho/godotenv"
 	log "github.com/sirupsen/logrus"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
 	"sync"
@@ -18,7 +19,7 @@ import (
 var embeddedVersion string
 
 func main() {
-	var (
+	var ( // default settings:
 		logLevel             string
 		mqttBroker           string
 		mqttPort             int = 8883
@@ -32,8 +33,10 @@ func main() {
 		kafkaPort            int = 9092
 		kafkaTopic           string
 		healthPort           int = 8080
-		kafkaWorkers         int = 1
 		kafkaRetryInterval   int = 3
+		kafkaInterval        int = 5
+		kafkaBatchSize       int = 1000
+		kafkaMaxBatchSize    int = 8000
 	)
 
 	err := godotenv.Load()
@@ -66,12 +69,16 @@ func main() {
 		LookupEnvOrInt("KAFKA_PORT", kafkaPort), "Kafka broker port")
 	flag.StringVar(&kafkaTopic, "kafka-topic",
 		LookupEnvOrString("KAFKA_TOPIC", kafkaTopic), "Kafka topic to write to")
-	flag.IntVar(&kafkaWorkers, "kafka-workers",
-		LookupEnvOrInt("KAFKA_WORKERS", kafkaWorkers), "Kafka workers")
 	flag.IntVar(&kafkaRetryInterval, "kafka-retry-interval",
-		LookupEnvOrInt("KAFKA_RETRY_INTERVAL", kafkaRetryInterval), "Kafka retry interval (seconds)")
+		LookupEnvOrInt("KAFKA_RETRY_INTERVAL", kafkaRetryInterval), "Kafka retry interval in case of failure (seconds)")
 	flag.IntVar(&healthPort, "health-port",
 		LookupEnvOrInt("HEALTH_PORT", healthPort), "HTTP port for healthz and prometheus")
+	flag.IntVar(&kafkaBatchSize, "kafka-batch-size",
+		LookupEnvOrInt("KAFKA_BATCH_SIZE", kafkaBatchSize), "Kafka batch size")
+	flag.IntVar(&kafkaMaxBatchSize, "kafka-max-batch-size",
+		LookupEnvOrInt("KAFKA_MAX_BATCH_SIZE", kafkaMaxBatchSize), "Kafka MAX batch size (used when un-spooling after failure)")
+	flag.IntVar(&kafkaInterval, "kafka-interval",
+		LookupEnvOrInt("KAFKA_INTERVAL", kafkaInterval), "Kafka interval. How often a write is triggered (seconds)")
 	flag.Parse()
 
 	setLoglevel(logLevel)
@@ -82,7 +89,7 @@ func main() {
 		CheckSet(mqttCaClientKeyFile, "MQTT_CLIENT_KEY", "tls is enabled")
 	}
 
-	runConfig := bridge.BridgeParams{
+	runConfig := bridge.Params{
 		MqttBroker:         mqttBroker,
 		MqttPort:           mqttPort,
 		MqttTopic:          mqttTopic,
@@ -94,15 +101,22 @@ func main() {
 		KafkaBroker:        kafkaBroker,
 		KafkaPort:          kafkaPort,
 		KafkaTopic:         kafkaTopic,
-		KafkaWorkers:       kafkaWorkers,
 		KafkaRetryInterval: time.Duration(kafkaRetryInterval) * time.Second,
+		KafkaInterval:      time.Duration(kafkaInterval) * time.Second,
+		KafkaBatchSize:     kafkaBatchSize,
+		KafkaMaxBatchSize:  kafkaMaxBatchSize,
 		HealthPort:         healthPort,
 	}
 	log.Infof("Startup options: %v", runConfig)
 	log.Debug("Starting bridge")
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer cancel()
 	wg := sync.WaitGroup{}
 	wg.Add(1)
-	go bridge.Run(context.Background(), &wg, runConfig)
+	go func() {
+		defer wg.Done()
+		bridge.Run(ctx, runConfig)
+	}()
 	wg.Wait()
 	log.Debug("Waiting over. Exiting.")
 

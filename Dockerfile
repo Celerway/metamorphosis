@@ -1,10 +1,11 @@
-FROM golang:1.16-alpine AS build
+FROM golang:1.18-alpine AS build
 ENV CGO_ENABLED=0
 ENV GOOS=linux
 ENV DOCKER_BUILDKIT=1
 WORKDIR /src
 COPY . .
-RUN go build  -o /out/metamorphosis cmd/main.go
+RUN apk add git
+RUN go test ./... && go build  -o /out/metamorphosis cmd/main.go
 FROM alpine AS base
 COPY --from=build /out/metamorphosis /
 RUN addgroup -g 2000 metad && \

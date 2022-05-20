@@ -5,29 +5,27 @@ import (
 	"github.com/celerway/metamorphosis/bridge/observability"
 	paho "github.com/eclipse/paho.mqtt.golang"
 	log "github.com/sirupsen/logrus"
-	"sync"
 )
 
-type MqttParams struct {
+type Params struct {
 	Broker     string
 	Port       int
 	Clientid   string
 	Tls        bool
 	TlsConfig  *tls.Config
 	Channel    MessageChannel
-	WaitGroup  *sync.WaitGroup
 	Topic      string
-	ObsChannel observability.ObservabilityChannel
+	ObsChannel observability.Channel
 }
 
-type MqttChannelMessage struct {
+type ChannelMessage struct {
 	Topic   string
 	Content []byte
 }
 
-type MessageChannel chan MqttChannelMessage
+type MessageChannel chan ChannelMessage
 
-type mqttClient struct {
+type client struct {
 	paho       paho.Client
 	tlsConfig  *tls.Config
 	broker     string
@@ -35,8 +33,7 @@ type mqttClient struct {
 	clientId   string
 	tls        bool
 	ch         MessageChannel
-	waitGroup  *sync.WaitGroup
 	topic      string
-	obsChannel observability.ObservabilityChannel
+	obsChannel observability.Channel
 	logger     *log.Entry
 }

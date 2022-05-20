@@ -121,10 +121,10 @@ func (k *buffer) Send(force bool) {
 		err = k.sendBatched()
 	}
 	if err != nil {
+		k.failures++
 		k.logger.Warnf("Send: %s (buffered msgs: %d time taken: %v, failures: %d)",
 			err, msgs, time.Since(start), k.failures)
 		k.failureState = true
-		k.failures++
 		return
 	}
 	k.logger.Debugf("Send: Wrote %d messages in %v [cur buffer: %d]", msgs, time.Since(start), len(k.buffer))

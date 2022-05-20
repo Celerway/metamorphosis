@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/celerway/metamorphosis/bridge/observability"
 	is2 "github.com/matryer/is"
 	"github.com/segmentio/kafka-go"
 	log "github.com/sirupsen/logrus"
@@ -31,6 +32,7 @@ func (m *mockWriter) WriteMessages(ctx context.Context, msgs ...kafka.Message) e
 	defer m.mu.Unlock()
 	// if deadlock, block until context is cancelled
 	if m.deadlock {
+		log.Warn("writer is deadlocked")
 		<-ctx.Done()
 	}
 	time.Sleep(m.batchDelay + m.msgDelay*time.Duration(len(msgs)))
@@ -110,7 +112,7 @@ func waitForAtomic(a *uint64, v uint64, timeout, sleeptime time.Duration) error 
 }
 
 func TestMain(m *testing.M) {
-	log.SetLevel(log.TraceLevel)
+	log.SetLevel(log.WarnLevel)
 	log.Debug("Running test suite")
 	ret := m.Run()
 	log.Debug("Test suite complete")
@@ -122,6 +124,7 @@ func TestBuffer_Run(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	storage := &mockWriter{}
 	buffer := makeTestBuffer(storage)
+	defer close(buffer.obsChannel)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
@@ -140,17 +143,23 @@ func TestBuffer_Run(t *testing.T) {
 }
 
 func makeTestBuffer(writer *mockWriter) buffer {
+	obsChannel := make(observability.Channel)
+	go func() { // service the obs channel.
+		for range obsChannel {
+		}
+	}()
 	return buffer{
 		interval:             1 * time.Millisecond,
 		failureRetryInterval: 80 * time.Millisecond,
 		buffer:               make([]kafka.Message, 0, 10),
 		topic:                "unittest",
 		writer:               writer,
-		C:                    make(chan Message, 0),
+		C:                    make(chan Message),
 		batchSize:            5,
 		maxBatchSize:         20,
 		kafkaTimeout:         25 * time.Millisecond,
 		logger:               log.WithFields(log.Fields{"module": "kafka", "instance": "test"}),
+		obsChannel:           obsChannel,
 	}
 }
 
@@ -160,6 +169,7 @@ func TestBuffer_Process_ok(t *testing.T) {
 	storage := &mockWriter{}
 	ctx, cancel := context.WithCancel(context.Background())
 	buffer := makeTestBuffer(storage)
+	defer close(buffer.obsChannel)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
@@ -189,6 +199,7 @@ func TestBuffer_Process_fail(t *testing.T) {
 	storage := &mockWriter{}
 	ctx, cancel := context.WithCancel(context.Background())
 	buffer := makeTestBuffer(storage)
+	defer close(buffer.obsChannel)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
@@ -232,8 +243,48 @@ func TestBuffer_Process_initial_fail(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	buffer := makeTestBuffer(storage)
+	defer close(buffer.obsChannel)
 	err := buffer.Run(ctx)
 	is.True(err != nil) // should be error
+}
+
+// Test with the buffer deadlocking
+func TestBuffer_deadlock(t *testing.T) {
+	is := is2.New(t)
+	is.True(true)
+	storage := &mockWriter{}
+	storage.setDeadlock(true)
+	buffer := makeTestBuffer(storage)
+	defer close(buffer.obsChannel)
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() {
+		defer wg.Done()
+		err := buffer.Run(ctx)
+		if err != nil {
+			log.Errorf("Error %s", err)
+		}
+		log.Info("buffer run complete")
+	}()
+	for i := 0; i < 50; i++ {
+		buffer.C <- makeMessage("test", i)
+	}
+	time.Sleep(time.Millisecond * 100)
+	cancel() // release the deadlock.
+	for i := 0; i < 50; i++ {
+		_, err := storage.getMessage(i)
+		if err != nil {
+			t.Errorf("Error getting message %d: %s", i, err)
+		}
+		/*
+			topic := m.Topic
+			body := m.Content
+			fmt.Printf("Topic: %s Message: %s\n", topic, body)
+		*/
+	}
+
 }
 
 // Induces slowness into the writer. Not sure what it should test, really.
@@ -242,6 +293,7 @@ func TestBuffer_Process_slow(t *testing.T) {
 	storage.setDelay(2*time.Millisecond, time.Microsecond*10)
 	ctx, cancel := context.WithCancel(context.Background())
 	buffer := makeTestBuffer(storage)
+	defer close(buffer.obsChannel)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
@@ -274,10 +326,10 @@ func TestBuffer_Process_slow(t *testing.T) {
 }
 
 func TestBuffer_Batching(t *testing.T) {
-	log.SetLevel(log.DebugLevel)
 	is := is2.New(t)
 	storage := &mockWriter{}
 	buffer := makeTestBuffer(storage)
+	defer close(buffer.obsChannel)
 	buffer.batchSize = 100
 	buffer.maxBatchSize = 1000
 	ctx, cancel := context.WithCancel(context.Background())
@@ -309,10 +361,10 @@ func TestBuffer_Batching(t *testing.T) {
 // Get the buffer up and running. Fails it and then proceeed to rewrite
 // 10000 messages to it. See if it recovers and clears all the messages.
 func TestBuffer_Batching_Recovery(t *testing.T) {
-	log.SetLevel(log.ErrorLevel)
 	is := is2.New(t)
 	storage := &mockWriter{}
 	buffer := makeTestBuffer(storage)
+	defer close(buffer.obsChannel)
 	buffer.batchSize = 100
 	buffer.maxBatchSize = 1000
 	ctx, cancel := context.WithCancel(context.Background())
@@ -333,7 +385,6 @@ func TestBuffer_Batching_Recovery(t *testing.T) {
 		buffer.C <- makeMessage("test", i)
 	}
 	storage.setState(false)
-	log.SetLevel(log.DebugLevel)
 	err := waitForAtomic(&storage.msgs, 10002, time.Millisecond*2000, time.Millisecond)
 	log.Infof("Writes: %d", atomic.LoadUint64(&storage.writes))
 	log.Infof("Msgs: %d", atomic.LoadUint64(&storage.msgs))
@@ -356,10 +407,10 @@ func TestBuffer_Batching_Recovery(t *testing.T) {
 // Finally check that all messages have been written to the storage correctly in the right order.
 func TestBuffer_Batching_RecoveryInterrupted(t *testing.T) {
 	const count = 1000
-	log.SetLevel(log.DebugLevel)
 	is := is2.New(t)
 	storage := &mockWriter{}
 	buffer := makeTestBuffer(storage)
+	defer close(buffer.obsChannel)
 	buffer.batchSize = 10
 	buffer.maxBatchSize = 100
 	storage.batchDelay = time.Millisecond

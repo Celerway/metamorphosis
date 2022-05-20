@@ -70,7 +70,7 @@ func (obs *observability) runHttpServer() {
 		obs.waitGroup.Add(1)
 		defer obs.waitGroup.Done()
 		srv := &http.Server{
-			Addr: fmt.Sprintf("%s", listenPort),
+			Addr: listenPort,
 		}
 		obs.srv = srv
 		if err := srv.ListenAndServe(); err != http.ErrServerClosed {

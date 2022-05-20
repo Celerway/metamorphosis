@@ -21,6 +21,7 @@ type buffer struct {
 	kafkaTimeout         time.Duration
 	failures             int
 	logger               *log.Entry
+	obsChannel           observability.Channel
 }
 
 type Message struct {
@@ -38,6 +39,6 @@ type Params struct {
 	MaxBatchSize  int
 	Interval      time.Duration
 	Topic         string
-	ObsChannel    observability.ObservabilityChannel
+	ObsChannel    observability.Channel
 	RetryInterval time.Duration
 }

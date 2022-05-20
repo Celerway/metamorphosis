@@ -22,6 +22,9 @@ type Params struct {
 	HealthPort         int
 	KafkaRetryInterval time.Duration
 	MqttClientId       string
+	KafkaBatchSize     int
+	KafkaMaxBatchSize  int
+	KafkaInterval      time.Duration
 }
 
 type bridge struct {

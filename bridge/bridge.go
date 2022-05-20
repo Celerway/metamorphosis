@@ -3,7 +3,6 @@ package bridge
 import (
 	kafka "github.com/celerway/metamorphosis/bridge/kafka"
 	"github.com/celerway/metamorphosis/bridge/mqtt"
-	log "github.com/sirupsen/logrus"
 )
 
 // Here I put the stuff that glues the mqtt to the kafka.
@@ -22,6 +21,6 @@ func (br bridge) glueMsgHandler(msg mqtt.ChannelMessage) {
 		Topic:   msg.Topic,
 		Content: msg.Content,
 	}
-	log.Trace("bridge pushed a message to kafka")
+	br.logger.Trace("bridge pushed a message to kafka")
 	br.kafkaCh <- kafkaMsg
 }

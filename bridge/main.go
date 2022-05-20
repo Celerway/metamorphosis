@@ -24,7 +24,7 @@ func Run(ctx context.Context, params Params) {
 	// to do this.
 	mqttCtx, mqttCancel := context.WithCancel(context.Background())   // Mqtt client. Cleanup first.
 	kafkaCtx, kafkaCancel := context.WithCancel(context.Background()) // Kafka, shutdown after mqtt.
-	obsCtx, obsCancel := context.WithCancel(context.Background())
+	obsCtx, obsCancel := context.WithCancel(context.Background())     // obs, needs to be shutdown last to avoid deadlocks.
 	obsChan := observability.GetChannel(channelSize)
 	br := bridge{
 		mqttCh:  make(mqtt.MessageChannel, channelSize),
@@ -51,10 +51,11 @@ func Run(ctx context.Context, params Params) {
 		Topic:         params.KafkaTopic,
 		ObsChannel:    obsChan,
 		RetryInterval: params.KafkaRetryInterval,
-		Interval:      10 * time.Second, // Todo: read this from env.
-		BatchSize:     1000,             // Todo: read this from env
+		Interval:      params.KafkaInterval,
+		BatchSize:     params.KafkaBatchSize,
+		MaxBatchSize:  params.KafkaMaxBatchSize,
 	}
-	obsParams := observability.ObservabilityParams{
+	obsParams := observability.Params{
 		Channel:    obsChan,
 		HealthPort: params.HealthPort,
 		WaitGroup:  &wg,

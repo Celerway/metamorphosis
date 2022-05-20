@@ -150,6 +150,7 @@ func makeTestBuffer(writer *mockWriter) buffer {
 		batchSize:            5,
 		maxBatchSize:         20,
 		kafkaTimeout:         25 * time.Millisecond,
+		logger:               log.WithFields(log.Fields{"module": "kafka", "instance": "test"}),
 	}
 }
 

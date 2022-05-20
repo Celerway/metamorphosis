@@ -15,7 +15,7 @@ type Params struct {
 	TlsConfig  *tls.Config
 	Channel    MessageChannel
 	Topic      string
-	ObsChannel observability.ObservabilityChannel
+	ObsChannel observability.Channel
 }
 
 type ChannelMessage struct {
@@ -34,6 +34,6 @@ type client struct {
 	tls        bool
 	ch         MessageChannel
 	topic      string
-	obsChannel observability.ObservabilityChannel
+	obsChannel observability.Channel
 	logger     *log.Entry
 }

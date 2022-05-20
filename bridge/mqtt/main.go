@@ -11,8 +11,6 @@ import (
 )
 
 func Run(ctx context.Context, params Params) {
-	log.Debugf("Starting MQTT Worker.")
-	log.Debugf("Broker: %s:%d (tls: %v)", params.Broker, params.Port, params.Tls)
 	client := client{
 		broker:     params.Broker,
 		port:       params.Port,
@@ -23,6 +21,8 @@ func Run(ctx context.Context, params Params) {
 		obsChannel: params.ObsChannel,
 		logger:     log.WithFields(log.Fields{"module": "mqtt"}),
 	}
+	client.logger.Debugf("Starting MQTT Worker.")
+	client.logger.Debugf("Broker: %s:%d (tls: %v)", params.Broker, params.Port, params.Tls)
 
 	opts := paho.NewClientOptions()
 	if params.Tls {
@@ -52,10 +52,7 @@ func (client client) mainloop(ctx context.Context) {
 	<-ctx.Done()
 	client.logger.Info("MQTT client context is cancelled. Shutting down.")
 	client.unsubscribe()
-	time.Sleep(100 * time.Millisecond)
 	client.paho.Disconnect(100)
-	client.logger.Debug("MQTT disconnected")
-
 	client.logger.Info("MQTT client exiting")
 }
 
@@ -80,7 +77,6 @@ func (client *client) connect() {
 	}
 	if !connected && attempts >= connectionAttempts {
 		client.logger.Errorf("Max number of connection attempt reached. Giving up and aborting.")
-		time.Sleep(time.Second)
 		os.Exit(1)
 	}
 	client.logger.Infof("Worker '%v' connected to MQTT %s:%d", client.clientId, client.broker, client.port)
@@ -130,5 +126,5 @@ func (client client) messageHandler(_ paho.Client, msg paho.Message) {
 		Content: msg.Payload(),
 	}
 	client.ch <- chMsg
-	client.obsChannel <- observability.MqttRecieved
+	client.obsChannel <- observability.MattReceived
 }

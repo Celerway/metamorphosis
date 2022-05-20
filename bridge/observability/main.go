@@ -3,7 +3,6 @@ package observability
 import (
 	"context"
 	"fmt"
-	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -13,7 +12,7 @@ import (
 )
 
 func (obs observability) Run(ctx context.Context) {
-	log.Debug("Observability worker is running")
+	obs.logger.Debug("Observability worker is running")
 	go func() {
 		<-ctx.Done()
 		close(obs.channel)
@@ -23,7 +22,7 @@ func (obs observability) Run(ctx context.Context) {
 	}
 }
 
-func Initialize(params ObservabilityParams) *observability {
+func Initialize(params Params) *observability {
 	reg := prometheus.NewRegistry()
 
 	obs := observability{
@@ -44,7 +43,7 @@ func Initialize(params ObservabilityParams) *observability {
 	})
 	obs.kafkaSent = promauto.With(reg).NewCounter(prometheus.CounterOpts{
 		Name: "kafka_sent",
-		Help: "Number of sent Kafka messages",
+		Help: "Number of batches sent to kafka",
 	})
 	obs.kafkaErrors = promauto.With(reg).NewCounter(prometheus.CounterOpts{
 		Name: "kafka_errors",
@@ -54,26 +53,24 @@ func Initialize(params ObservabilityParams) *observability {
 		Name: "kafka_state",
 		Help: "Kafka status (0 is OK)",
 	})
-	log.Debug("Obs entering mainloop")
-
-	log.Debug("Obs starting http server")
+	obs.logger.Debug("Obs entering mainloop. Starting HTTP server.")
 	obs.runHttpServer()
 	return &obs // Return the struct so the bridge can adjust the health status.
 }
 
 func (obs *observability) runHttpServer() {
 	// We don't care about waitGroups and stuff here. We can be aborted at any time.
-	router := mux.NewRouter().StrictSlash(true)
-	router.Handle("/metrics", promhttp.HandlerFor(obs.promReg, promhttp.HandlerOpts{}))
-	router.HandleFunc("/healthz", obs.HealthzHandler)
+	// router := mux.NewRouter().StrictSlash(true)
+
+	http.Handle("/metrics", promhttp.HandlerFor(obs.promReg, promhttp.HandlerOpts{}))
+	http.HandleFunc("/healthz", obs.HealthzHandler)
 	listenPort := fmt.Sprintf(":%d", obs.healthPort)
 	obs.logger.Infof("Observability service attempting to listen to port %s", listenPort)
 	go func() {
 		obs.waitGroup.Add(1)
 		defer obs.waitGroup.Done()
-		srv := &http.Server{ // http.Server has some mutexes, so we use a pointer.
-			Addr:    fmt.Sprintf("%s", listenPort),
-			Handler: router,
+		srv := &http.Server{
+			Addr: fmt.Sprintf("%s", listenPort),
 		}
 		obs.srv = srv
 		if err := srv.ListenAndServe(); err != http.ErrServerClosed {
@@ -86,7 +83,6 @@ func (obs *observability) Cleanup() {
 	obs.logger.Info("De-registering prometheus counters")
 	obs.promReg.Unregister(obs.mqttReceived) // During testing we run multiple bridges in the same binary.
 	obs.promReg.Unregister(obs.mqttErrors)   // So we must make sure that these don't collide.
-	obs.promReg.Unregister(obs.kafkaSent)
 	obs.promReg.Unregister(obs.kafkaSent)
 	obs.promReg.Unregister(obs.kafkaState)
 
@@ -102,7 +98,7 @@ func (obs observability) handleChannelMessage(msg StatusMessage) {
 	obs.logger.Tracef("Observability received %s", msg)
 
 	switch msg {
-	case MqttRecieved:
+	case MattReceived:
 		obs.mqttReceived.Inc()
 	case MqttError:
 		obs.mqttErrors.Inc()
@@ -117,8 +113,8 @@ func (obs observability) handleChannelMessage(msg StatusMessage) {
 	}
 }
 
-func GetChannel(size int) ObservabilityChannel {
-	return make(ObservabilityChannel, size) //
+func GetChannel(size int) Channel {
+	return make(Channel, size) //
 }
 
 func (obs *observability) HealthzHandler(w http.ResponseWriter, _ *http.Request) {

@@ -7,29 +7,29 @@ import (
 	"sync"
 )
 
-type ObservabilityChannel chan StatusMessage
+type Channel chan StatusMessage
 
 type StatusMessage int
 
 const (
-	MqttRecieved StatusMessage = iota
+	MattReceived StatusMessage = iota
 	MqttError
 	KafkaSent
 	KafkaError
 )
 
 func (d StatusMessage) String() string {
-	return [...]string{"MqttRecieved", "MqttError", "KafkaSent", "KafkaError"}[d]
+	return [...]string{"MattReceived", "MqttError", "KafkaSent", "KafkaError"}[d]
 }
 
-type ObservabilityParams struct {
-	Channel    ObservabilityChannel
+type Params struct {
+	Channel    Channel
 	HealthPort int
 	WaitGroup  *sync.WaitGroup
 }
 
 type observability struct {
-	channel      ObservabilityChannel
+	channel      Channel
 	mqttReceived prometheus.Counter
 	mqttErrors   prometheus.Counter
 	kafkaSent    prometheus.Counter

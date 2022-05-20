@@ -4,14 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/celerway/metamorphosis/bridge/observability"
 	gokafka "github.com/segmentio/kafka-go"
 	log "github.com/sirupsen/logrus"
 	"strconv"
 	"time"
-)
-
-const (
-	maxBatchSize = 8000
 )
 
 func Initialize(p Params) *buffer {
@@ -22,7 +19,7 @@ func Initialize(p Params) *buffer {
 		Topic:        p.Topic,
 		MaxAttempts:  10,
 		BatchSize:    1,
-		BatchTimeout: time.Millisecond * 20,
+		BatchTimeout: time.Millisecond * 20, // Just a really low timeout so the batch is written more or less right away.
 		RequiredAcks: gokafka.RequireAll,
 		Async:        false,
 		Compression:  0,
@@ -35,11 +32,12 @@ func Initialize(p Params) *buffer {
 		failureState:         false,
 		failureRetryInterval: p.RetryInterval,
 		C:                    p.Channel,
-		buffer:               make([]gokafka.Message, 0, 1000),
+		buffer:               make([]gokafka.Message, 0, p.BatchSize), // default is to have buffer for a full batch.
 		writer:               writer,
-		maxBatchSize:         maxBatchSize,
-		kafkaTimeout:         time.Second,
+		maxBatchSize:         p.MaxBatchSize,
+		kafkaTimeout:         time.Second * 10, // 10s timeout when takling to kafka.,
 		logger:               logger,
+		obsChannel:           p.ObsChannel,
 	}
 }
 
@@ -50,20 +48,19 @@ func (k *buffer) Run(ctx context.Context) error {
 		return fmt.Errorf("failed to send initial test message: %w", err)
 	}
 	ticker := time.NewTicker(k.interval)
-	k.logger.Infof("Kafka buffer started with interval %v", k.interval)
+	k.logger.Infof("Kafka interface started with write interval %v and batch size %d", k.interval, k.batchSize)
 loop:
 	for {
 		select {
 		case <-ctx.Done():
-			k.logger.Info("Kafka buffer: context cancelled")
+			k.logger.Info("context cancelled")
 			break loop
 		case <-ticker.C:
 			if time.Since(k.lastSendAttempt) > k.interval {
-				k.logger.Trace("Tick: Send it!")
 				k.Send(false)
 			}
 		case m := <-k.C:
-			k.logger.Trace("Kafka buffer: Message received")
+			k.logger.Trace("Message received")
 			k.Enqueue(m)
 		}
 	}
@@ -86,7 +83,7 @@ func (k *buffer) Enqueue(msg Message) {
 		Value: msgJson,
 	}
 	k.buffer = append(k.buffer, m)
-	if len(k.buffer) > k.batchSize {
+	if len(k.buffer) >= k.batchSize {
 		if k.failureState {
 			// Not triggering flush if we're failing.
 			return
@@ -95,6 +92,7 @@ func (k *buffer) Enqueue(msg Message) {
 		k.Send(false)
 		return
 	}
+	k.logger.Tracef("current buffer contains %d messages", len(k.buffer))
 }
 
 // Send will send all messages in the buffer to the gokafka broker
@@ -116,20 +114,21 @@ func (k *buffer) Send(force bool) {
 	defer k.updateLastSendAttempt() // update the attempt time, even if we fail.
 	var err error
 	start := time.Now()
-	if len(k.buffer) < k.maxBatchSize {
+	msgs := len(k.buffer)
+	if msgs <= k.maxBatchSize {
 		err = k.sendAll()
 	} else {
 		err = k.sendBatched()
 	}
 	if err != nil {
-		k.logger.Warnf("kafkabuffer/Send: %s (time taken: %v, failures: %d)", err, time.Since(start), k.failures)
+		k.logger.Warnf("Send: %s (buffered msgs: %d time taken: %v, failures: %d)",
+			err, msgs, time.Since(start), k.failures)
 		k.failureState = true
 		k.failures++
 		return
 	}
-	log.Debugf("kafkabuffer/Send: Wrote %d messages in %v", len(k.buffer), time.Since(start))
+	k.logger.Debugf("Send: Wrote %d messages in %v [cur buffer: %d]", msgs, time.Since(start), len(k.buffer))
 	k.failureState = false
-	k.buffer = k.buffer[:0] // clear the buffer
 	k.updateLastSendAttempt()
 }
 
@@ -138,7 +137,15 @@ func (k *buffer) sendAll() error {
 	k.logger.Debugf("Sending all messages (%d) in the buffer", len(k.buffer))
 	ctx, cancel := context.WithTimeout(context.Background(), k.kafkaTimeout)
 	defer cancel()
-	return k.writer.WriteMessages(ctx, k.buffer...)
+
+	err := k.writer.WriteMessages(ctx, k.buffer...)
+	if err != nil {
+		k.obsChannel <- observability.KafkaError
+		return err
+	}
+	k.obsChannel <- observability.KafkaSent
+	k.buffer = k.buffer[:0]
+	return nil
 }
 
 // sendBatched sends messages in batches of maxBatchSize.
@@ -160,16 +167,20 @@ func (k *buffer) sendBatched() error {
 		if l < k.maxBatchSize {
 			err := k.writer.WriteMessages(ctx, k.buffer...)
 			if err != nil {
+				k.obsChannel <- observability.KafkaError
 				return fmt.Errorf("error batch %d", batch)
 			}
 			k.buffer = k.buffer[:0] // done. clear the buffer.
+			k.obsChannel <- observability.KafkaSent
 			break
 		} else {
 			err := k.writer.WriteMessages(ctx, k.buffer[:k.maxBatchSize]...)
 			if err != nil {
+				k.obsChannel <- observability.KafkaError
 				return err
 			}
 			k.buffer = k.buffer[k.maxBatchSize:] // remove the first k.maxBatchSize messages from the buffer.
+			k.obsChannel <- observability.KafkaSent
 		}
 	}
 	return nil
@@ -191,7 +202,7 @@ func (k *buffer) updateLastSendAttempt() {
 func generateTestMessage() gokafka.Message {
 	msg := Message{
 		Topic:   "test",
-		Content: []byte("Internal test to see if gokafka is alive at startup"),
+		Content: []byte("Internal test to see if kafka is alive at startup"),
 	}
 	msgJson, err := json.Marshal(msg)
 	if err != nil {

@@ -3,6 +3,7 @@ module github.com/celerway/metamorphosis
 go 1.18
 
 require (
+	github.com/celerway/chainsaw v0.0.0-20211219154652-008b7204929c
 	github.com/eclipse/paho.mqtt.golang v1.3.4
 	github.com/joho/godotenv v1.3.0
 	github.com/matryer/is v1.4.0

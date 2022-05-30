@@ -247,6 +247,7 @@ func TestBuffer_Process_initial_fail(t *testing.T) {
 	defer close(buffer.obsChannel)
 	err := buffer.Run(ctx)
 	is.True(err != nil) // should be error
+	fmt.Println("Expected error: ", err)
 }
 
 // Test with the buffer deadlocking
@@ -274,6 +275,7 @@ func TestBuffer_deadlock(t *testing.T) {
 	}
 	time.Sleep(time.Millisecond * 100)
 	cancel() // release the deadlock.
+	time.Sleep(time.Millisecond * 100)
 	for i := 0; i < 50; i++ {
 		_, err := storage.getMessage(i)
 		if err != nil {
@@ -310,6 +312,7 @@ func TestBuffer_Process_slow(t *testing.T) {
 	}
 	err := waitForAtomic(&storage.msgs, 51, time.Millisecond*5000, time.Millisecond)
 	if err != nil {
+		dumpLogs()
 		t.Errorf("Error %s", err)
 	}
 	cancel()
@@ -480,8 +483,11 @@ func makeMessage(topic string, id int) Message {
 }
 
 func dumpLogs() {
+	fmt.Println("====== dumping logs ======")
 	msgs := log.GetMessages(log.TraceLevel)
 	for _, m := range msgs {
 		fmt.Printf("%s: %s %s\n", m.LogLevel.String(), m.TimeStamp.Format(time.RFC3339), m.Message)
 	}
+	fmt.Println("====== end of dump ======")
+
 }

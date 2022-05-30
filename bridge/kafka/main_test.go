@@ -149,7 +149,7 @@ func makeTestBuffer(writer *mockWriter) buffer {
 		}
 	}()
 	return buffer{
-		interval:             1 * time.Millisecond,
+		interval:             2 * time.Millisecond,
 		failureRetryInterval: 80 * time.Millisecond,
 		buffer:               make([]kafka.Message, 0, 10),
 		topic:                "unittest",

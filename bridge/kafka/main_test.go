@@ -5,10 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	log "github.com/celerway/chainsaw"
 	"github.com/celerway/metamorphosis/bridge/observability"
 	is2 "github.com/matryer/is"
 	"github.com/segmentio/kafka-go"
-	log "github.com/sirupsen/logrus"
+	logrus "github.com/sirupsen/logrus"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -149,7 +150,7 @@ func makeTestBuffer(writer *mockWriter) buffer {
 		}
 	}()
 	return buffer{
-		interval:             1 * time.Millisecond,
+		interval:             2 * time.Millisecond,
 		failureRetryInterval: 80 * time.Millisecond,
 		buffer:               make([]kafka.Message, 0, 10),
 		topic:                "unittest",
@@ -158,7 +159,7 @@ func makeTestBuffer(writer *mockWriter) buffer {
 		batchSize:            5,
 		maxBatchSize:         20,
 		kafkaTimeout:         25 * time.Millisecond,
-		logger:               log.WithFields(log.Fields{"module": "kafka", "instance": "test"}),
+		logger:               logrus.WithFields(logrus.Fields{"module": "kafka", "instance": "test"}),
 		obsChannel:           obsChannel,
 	}
 }
@@ -246,6 +247,7 @@ func TestBuffer_Process_initial_fail(t *testing.T) {
 	defer close(buffer.obsChannel)
 	err := buffer.Run(ctx)
 	is.True(err != nil) // should be error
+	fmt.Println("Expected error: ", err)
 }
 
 // Test with the buffer deadlocking
@@ -273,6 +275,7 @@ func TestBuffer_deadlock(t *testing.T) {
 	}
 	time.Sleep(time.Millisecond * 100)
 	cancel() // release the deadlock.
+	time.Sleep(time.Millisecond * 100)
 	for i := 0; i < 50; i++ {
 		_, err := storage.getMessage(i)
 		if err != nil {
@@ -309,6 +312,7 @@ func TestBuffer_Process_slow(t *testing.T) {
 	}
 	err := waitForAtomic(&storage.msgs, 51, time.Millisecond*5000, time.Millisecond)
 	if err != nil {
+		dumpLogs()
 		t.Errorf("Error %s", err)
 	}
 	cancel()
@@ -326,11 +330,13 @@ func TestBuffer_Process_slow(t *testing.T) {
 }
 
 func TestBuffer_Batching(t *testing.T) {
-	is := is2.New(t)
+	const batchSize = 100
+	const totalMsgs = 10000
+
 	storage := &mockWriter{}
 	buffer := makeTestBuffer(storage)
 	defer close(buffer.obsChannel)
-	buffer.batchSize = 100
+	buffer.batchSize = batchSize
 	buffer.maxBatchSize = 1000
 	ctx, cancel := context.WithCancel(context.Background())
 	wg := sync.WaitGroup{}
@@ -344,14 +350,26 @@ func TestBuffer_Batching(t *testing.T) {
 		log.Info("buffer run complete")
 	}()
 	storage.setState(false)
-	for i := 0; i < 10000; i++ {
+	for i := 0; i < totalMsgs; i++ {
 		buffer.C <- makeMessage("test", i)
 	}
 	storage.setState(false)
-	err := waitForAtomic(&storage.msgs, 10001, time.Millisecond*500, time.Millisecond)
-	is.NoErr(err)
-	is.Equal(atomic.LoadUint64(&storage.writes), uint64(101))
-	is.Equal(atomic.LoadUint64(&storage.msgs), uint64(10001))
+	start := time.Now()
+	err := waitForAtomic(&storage.msgs, totalMsgs+1, time.Millisecond*500, time.Millisecond)
+	dur := time.Since(start)
+	log.Info("Duration: ", dur)
+	if err != nil {
+		dumpLogs()
+		t.Errorf("waitForAtomic Error %s", err)
+	}
+	if atomic.LoadUint64(&storage.writes) != batchSize+1 {
+		dumpLogs()
+		t.Errorf("Wrong number of batched writes: %d", atomic.LoadUint64(&storage.writes))
+	}
+	if atomic.LoadUint64(&storage.msgs) != totalMsgs+1 {
+		dumpLogs()
+		t.Errorf("Wrong number of messages: %d", atomic.LoadUint64(&storage.msgs))
+	}
 	cancel()
 	wg.Wait()
 	log.Debug("Done")
@@ -462,4 +480,14 @@ func makeMessage(topic string, id int) Message {
 		Topic:   topic,
 		Content: []byte(fmt.Sprintf("Test message %d", id)),
 	}
+}
+
+func dumpLogs() {
+	fmt.Println("====== dumping logs ======")
+	msgs := log.GetMessages(log.TraceLevel)
+	for _, m := range msgs {
+		fmt.Printf("%s: %s %s\n", m.LogLevel.String(), m.TimeStamp.Format(time.RFC3339), m.Message)
+	}
+	fmt.Println("====== end of dump ======")
+
 }

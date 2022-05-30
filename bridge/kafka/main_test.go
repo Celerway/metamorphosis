@@ -363,7 +363,7 @@ func TestBuffer_Batching(t *testing.T) {
 		dumpLogs()
 		t.Errorf("Wrong number of batched writes: %d", atomic.LoadUint64(&storage.writes))
 	}
-	if atomic.LoadUint64(&storage.msgs) != totalMsgs {
+	if atomic.LoadUint64(&storage.msgs) != totalMsgs+1 {
 		dumpLogs()
 		t.Errorf("Wrong number of messages: %d", atomic.LoadUint64(&storage.msgs))
 	}

@@ -46,7 +46,7 @@ func Run(ctx context.Context, params Params) {
 // This is a goroutine. When you return it dies.
 // Connects to the MQTT broker, subscribes and processes messages.
 // All the works happens in the event handler.
-func (client client) mainloop(ctx context.Context) {
+func (client *client) mainloop(ctx context.Context) {
 	// Here we start blocking the goroutine and wait for shutdown.
 	// If we need to keep track of something we can wrap this in a loop
 	<-ctx.Done()
@@ -81,17 +81,18 @@ func (client *client) connect() {
 	}
 	client.logger.Infof("Worker '%v' connected to MQTT %s:%d", client.clientId, client.broker, client.port)
 }
-func (client client) handleConnect(_ paho.Client) {
+func (client *client) handleConnect(_ paho.Client) {
 	client.logger.Info("Connection to MQTT broker established")
 }
 
 func (client *client) handleDisconnect(_ paho.Client, err error) {
 	client.logger.Errorf("handleDisconnect invoked with error: %s", err)
+	time.Sleep(100 * time.Millisecond) // Add some time so the broker isn't rushed by reconnects.
 	client.logger.Info("Reconnecting to broker.")
 	client.connect()
 }
 
-func (client client) unsubscribe() {
+func (client *client) unsubscribe() {
 	token := client.paho.Unsubscribe(client.topic)
 	if token.Wait() && token.Error() != nil {
 		client.logger.Errorf("Could not unsubscribe from %s:  %s", client.topic, token.Error())
@@ -99,7 +100,7 @@ func (client client) unsubscribe() {
 		client.logger.Infof("Unsubscribed from topic '%s'", client.topic)
 	}
 }
-func (client client) subscribe() {
+func (client *client) subscribe() {
 	success := false
 	for !success {
 		client.logger.Tracef("Issuing subscribe to topic '%s'", client.topic)
@@ -119,7 +120,7 @@ func (client client) subscribe() {
 	client.logger.Infof("Subscribed to topic '%s'", client.topic)
 }
 
-func (client client) messageHandler(_ paho.Client, msg paho.Message) {
+func (client *client) messageHandler(_ paho.Client, msg paho.Message) {
 	client.logger.Tracef("Got message on topic %s. Message: %s", msg.Topic(), string(msg.Payload()))
 	chMsg := ChannelMessage{
 		Topic:   msg.Topic(),

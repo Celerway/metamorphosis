@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.2.2](https://github.com/Celerway/metamorphosis/compare/v0.2.1...v0.2.2) (2022-05-31)
+
+
+### Bug Fixes
+
+* make the client struct consistently accessed as a pointer. ([f12b380](https://github.com/Celerway/metamorphosis/commit/f12b380eaab3333f4551ffc2640ddc9892168596))
+
 ### [0.2.1](https://github.com/Celerway/metamorphosis/compare/v0.2.0...v0.2.1) (2022-05-30)
 
 ## [0.2.0](https://github.com/Celerway/metamorphosis/compare/v0.1.8...v0.2.0) (2022-05-20)

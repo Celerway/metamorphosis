@@ -190,7 +190,7 @@ func TestBuffer_Process_ok(t *testing.T) {
 	for i := 1; i <= 10; i++ {
 		m, err := storage.getDecodedMessage(i)
 		is.NoErr(err)
-		is.Equal([]byte(fmt.Sprintf("Test message %d", i-1)), m.Content)
+		is.Equal([]byte(fmt.Sprintf("%d", i-1)), m.Content)
 	}
 	log.Debug("Done")
 }
@@ -475,7 +475,7 @@ func TestBuffer_Batching_RecoveryInterrupted(t *testing.T) {
 		jmsg := Message{}
 		err := json.Unmarshal(val, &jmsg)
 		is.NoErr(err)
-		is.Equal(fmt.Sprintf("Test message %d", i), string(jmsg.Content))
+		is.Equal(fmt.Sprintf("%d", i), string(jmsg.Content))
 	}
 
 	log.Debug("Done")

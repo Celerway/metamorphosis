@@ -113,7 +113,7 @@ func waitForAtomic(a *uint64, v uint64, timeout, sleeptime time.Duration) error 
 }
 
 func TestMain(m *testing.M) {
-	log.SetLevel(log.WarnLevel)
+	log.SetLevel(log.InfoLevel)
 	log.Debug("Running test suite")
 	ret := m.Run()
 	log.Debug("Test suite complete")
@@ -290,10 +290,14 @@ func TestBuffer_deadlock(t *testing.T) {
 
 }
 
-// Induces slowness into the writer. Not sure what it should test, really.
+// TestBuffer_Process_slow - Induces slowness into the writer.
+// It guards against re-ordering of the messages
 func TestBuffer_Process_slow(t *testing.T) {
+	const noOfMessages = 500
+	is := is2.New(t)
 	storage := &mockWriter{}
-	storage.setDelay(2*time.Millisecond, time.Microsecond*10)
+
+	storage.setDelay(2*time.Millisecond, time.Microsecond*20)
 	ctx, cancel := context.WithCancel(context.Background())
 	buffer := makeTestBuffer(storage)
 	defer close(buffer.obsChannel)
@@ -307,26 +311,29 @@ func TestBuffer_Process_slow(t *testing.T) {
 		}
 		log.Info("buffer run complete")
 	}()
-	for i := 0; i < 50; i++ {
+	for i := 0; i < noOfMessages; i++ {
 		buffer.C <- makeMessage("test", i)
+		time.Sleep(time.Microsecond * 10)
 	}
-	err := waitForAtomic(&storage.msgs, 51, time.Millisecond*5000, time.Millisecond)
+	log.Info("Messages are sent")
+	err := waitForAtomic(&storage.msgs, noOfMessages+1, time.Millisecond*5000, time.Millisecond)
 	if err != nil {
 		dumpLogs()
 		t.Errorf("Error %s", err)
 	}
 	cancel()
 	wg.Wait()
-	for i := 0; i < 50; i++ {
+	for i := 1; i < noOfMessages; i++ {
 		m, err := storage.getMessage(i)
-		if err != nil {
-			t.Errorf("Error getting message %d: %s", i, err)
-		}
-		topic := m.Topic
-		body := m.Content
-		fmt.Printf("Topic: %s Message: %s\n", topic, body)
+		is.NoErr(err)
+		is.Equal(fmt.Sprintf("%d", i-1), string(m.Content))
+		is.Equal("test", m.Topic)
 	}
-	log.Debug("Done")
+	is.Equal(storage.msgs, uint64(noOfMessages+1))
+	fmt.Println("==== Done ==== ")
+	fmt.Printf("Writes %d ", storage.writes)
+	fmt.Printf("Messages %d", storage.msgs)
+	fmt.Println("\n =========== ")
 }
 
 func TestBuffer_Batching(t *testing.T) {
@@ -478,7 +485,7 @@ func TestBuffer_Batching_RecoveryInterrupted(t *testing.T) {
 func makeMessage(topic string, id int) Message {
 	return Message{
 		Topic:   topic,
-		Content: []byte(fmt.Sprintf("Test message %d", id)),
+		Content: []byte(fmt.Sprintf("%d", id)),
 	}
 }
 

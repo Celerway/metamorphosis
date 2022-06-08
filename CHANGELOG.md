@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.2.4](https://github.com/Celerway/metamorphosis/compare/v0.2.3...v0.2.4) (2022-06-08)
+
+
+### Bug Fixes
+
+* test where inconsistent. consistency restored. ([76df888](https://github.com/Celerway/metamorphosis/commit/76df888859f2877b6ed4ae98ea0a3b340a99220e))
+
 ### [0.2.3](https://github.com/Celerway/metamorphosis/compare/v0.2.2...v0.2.3) (2022-06-08)
 
 

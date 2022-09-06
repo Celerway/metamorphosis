@@ -151,7 +151,7 @@ func makeTestBuffer(writer *mockWriter) buffer {
 	}()
 	return buffer{
 		interval:             2 * time.Millisecond,
-		failureRetryInterval: 80 * time.Millisecond,
+		failureRetryInterval: 200 * time.Millisecond,
 		buffer:               make([]kafka.Message, 0, 10),
 		topic:                "unittest",
 		writer:               writer,
@@ -417,7 +417,7 @@ func TestBuffer_Batching_Recovery(t *testing.T) {
 	is.NoErr(err)
 	is.Equal(atomic.LoadUint64(&storage.msgs), uint64(10002))
 	is.Equal(atomic.LoadUint64(&storage.writes), uint64(12))
-	is.Equal(buffer.failures, 1)
+	is.Equal(buffer.failures, 1) // We expect one failure here.
 
 	cancel()
 	wg.Wait()

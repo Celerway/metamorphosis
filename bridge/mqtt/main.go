@@ -32,6 +32,7 @@ func Run(ctx context.Context, params Params) {
 	} else {
 		opts.AddBroker(fmt.Sprintf("mqtt://%s:%d", params.Broker, params.Port))
 	}
+	// opts.ResumeSubs = true
 	opts.SetClientID(client.clientId)
 	opts.SetConnectionLostHandler(client.handleDisconnect)
 	opts.SetOnConnectHandler(client.handleConnect)
@@ -56,26 +57,37 @@ func (client *client) mainloop(ctx context.Context) {
 	client.logger.Info("MQTT client exiting")
 }
 
-// connect
-// Connects to the broker. Blocks until the connection is established.
+// connect to the broker. Blocks until the connection is established and the subscription is done.
 func (client *client) connect() {
 	const connectionAttempts = 10
-	connected := false
+	fullyConnected := false
 	attempts := 0
-	for !connected && attempts < connectionAttempts {
-		client.logger.Infof("MQTT client connection attempt %d: connect to broker %s:%d (tls: %v).",
+	for !fullyConnected && attempts < connectionAttempts {
+		client.logger.Infof("MQTT client connection attempt %d: connect to broker %s:%d (tls: %t).",
 			attempts, client.broker, client.port, client.tls)
-		token := client.paho.Connect()
-		if token.Wait() && token.Error() != nil {
-			client.logger.Errorf("Could not connect to MQTT (%s). ", token.Error())
-			time.Sleep(100 * time.Millisecond) // Add some time so the broker isn't rushed by reconnects.
-		} else {
-			connected = true
-			client.subscribe() //  blocks. Also sets up handlers.
+		if !client.paho.IsConnected() {
+			client.logger.Info("MQTT client is not connected. Connecting.")
+			token := client.paho.Connect()
+			if token.Wait() && token.Error() != nil {
+				// didn't connect. increase attempts and try again.
+				client.logger.Errorf("Could not connect to MQTT (%s). ", token.Error())
+				time.Sleep(200 * time.Millisecond) // Add some time so the broker isn't rushed by reconnects.
+				attempts++
+				continue
+			}
+			client.logger.Info("MQTT client connected. Will attempt subscribe.")
 		}
-		attempts++
+		// connection should be up here. Issuing a MQTT subscribe now.
+		err := client.subscribe() //  blocks. Also sets up handlers.
+		if err != nil {
+			client.logger.Errorf("Could not subscribe to topic '%s': %s", client.topic, err)
+			time.Sleep(200 * time.Millisecond)
+			attempts++
+			continue
+		}
+		fullyConnected = true
 	}
-	if !connected && attempts >= connectionAttempts {
+	if !fullyConnected && attempts >= connectionAttempts {
 		client.logger.Errorf("Max number of connection attempt reached. Giving up and aborting.")
 		os.Exit(1)
 	}
@@ -100,24 +112,19 @@ func (client *client) unsubscribe() {
 		client.logger.Infof("Unsubscribed from topic '%s'", client.topic)
 	}
 }
-func (client *client) subscribe() {
-	success := false
-	for !success {
-		client.logger.Tracef("Issuing subscribe to topic '%s'", client.topic)
-		token := client.paho.Subscribe(client.topic, 1, client.messageHandler)
-		res := token.Wait()
-		// sToken, ok := token.(paho.SubscribeToken)
-
-		client.logger.Tracef("token.Wait is now: %v", res)
-		if token.Error() != nil {
-			client.logger.Errorf("Could not subscribe to '%s':  %s", client.topic, token.Error())
-			time.Sleep(100 * time.Millisecond) // Sleep some between attempts
-		} else {
-			client.logger.Infof("successfully subcribed to '%s", client.topic)
-			success = true
-		}
+func (client *client) subscribe() error {
+	client.logger.Tracef("Issuing subscribe to topic '%s'", client.topic)
+	token := client.paho.Subscribe(client.topic, 1, client.messageHandler)
+	res := token.Wait()
+	// sToken, ok := token.(paho.SubscribeToken)
+	client.logger.Tracef("token.Wait is now: %v", res)
+	if token.Error() != nil {
+		client.logger.Errorf("Could not subscribe to '%s':  %s", client.topic, token.Error())
+		return fmt.Errorf("subscribe error: %w", token.Error())
 	}
-	client.logger.Infof("Subscribed to topic '%s'", client.topic)
+
+	client.logger.Infof("successfully subcribed to '%s", client.topic)
+	return nil
 }
 
 func (client *client) messageHandler(_ paho.Client, msg paho.Message) {

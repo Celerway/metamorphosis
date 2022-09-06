@@ -32,11 +32,12 @@ func main() {
 		kafkaBroker          string
 		kafkaPort            int = 9092
 		kafkaTopic           string
-		healthPort           int = 8080
-		kafkaRetryInterval   int = 3
-		kafkaInterval        int = 5
-		kafkaBatchSize       int = 1000
-		kafkaMaxBatchSize    int = 8000
+		healthPort           int    = 8080
+		kafkaRetryInterval   int    = 3
+		kafkaInterval        int    = 5
+		kafkaBatchSize       int    = 1000
+		kafkaMaxBatchSize    int    = 8000
+		testMessageTopic     string = "test"
 	)
 
 	err := godotenv.Load()
@@ -79,6 +80,8 @@ func main() {
 		LookupEnvOrInt("KAFKA_MAX_BATCH_SIZE", kafkaMaxBatchSize), "Kafka MAX batch size (used when un-spooling after failure)")
 	flag.IntVar(&kafkaInterval, "kafka-interval",
 		LookupEnvOrInt("KAFKA_INTERVAL", kafkaInterval), "Kafka interval. How often a write is triggered (seconds)")
+	flag.StringVar(&testMessageTopic, "test-message-topic",
+		LookupEnvOrString("TEST_MESSAGE_TOPIC", testMessageTopic), "Test message topic for test messages when checking Kafka")
 	flag.Parse()
 
 	setLoglevel(logLevel)
@@ -106,6 +109,7 @@ func main() {
 		KafkaBatchSize:     kafkaBatchSize,
 		KafkaMaxBatchSize:  kafkaMaxBatchSize,
 		HealthPort:         healthPort,
+		TestMessageTopic:   testMessageTopic,
 	}
 	log.Infof("Startup options: %v", runConfig)
 	log.Debug("Starting bridge")

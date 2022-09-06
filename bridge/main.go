@@ -45,15 +45,16 @@ func Run(ctx context.Context, params Params) {
 		ObsChannel: obsChan,
 	}
 	kafkaParams := kafka.Params{
-		Broker:        params.KafkaBroker,
-		Port:          params.KafkaPort,
-		Channel:       br.kafkaCh,
-		Topic:         params.KafkaTopic,
-		ObsChannel:    obsChan,
-		RetryInterval: params.KafkaRetryInterval,
-		Interval:      params.KafkaInterval,
-		BatchSize:     params.KafkaBatchSize,
-		MaxBatchSize:  params.KafkaMaxBatchSize,
+		Broker:           params.KafkaBroker,
+		Port:             params.KafkaPort,
+		Channel:          br.kafkaCh,
+		Topic:            params.KafkaTopic,
+		ObsChannel:       obsChan,
+		RetryInterval:    params.KafkaRetryInterval,
+		Interval:         params.KafkaInterval,
+		BatchSize:        params.KafkaBatchSize,
+		MaxBatchSize:     params.KafkaMaxBatchSize,
+		TestMessageTopic: params.TestMessageTopic,
 	}
 	obsParams := observability.Params{
 		Channel:    obsChan,

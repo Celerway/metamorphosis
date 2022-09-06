@@ -21,7 +21,7 @@ old one is shut down. During this short period you'll see messages duplicates. M
 k8s run this is a stateful set if this shouldn't happen.
 
 Also note that the bridge will issue messages in order to test that it can talk to Kafka. These will be given the MQTT
-topic "test". Ignore these messages in your consumer.
+topic "test" (can be overridden with the environment variable TEST_MESSAGE_TOPIC). Ignore these messages in your consumer.
 
 ## Message format
 

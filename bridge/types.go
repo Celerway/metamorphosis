@@ -25,6 +25,7 @@ type Params struct {
 	KafkaBatchSize     int
 	KafkaMaxBatchSize  int
 	KafkaInterval      time.Duration
+	TestMessageTopic   string
 }
 
 type bridge struct {

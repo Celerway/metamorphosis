@@ -38,6 +38,7 @@ func Initialize(p Params) *buffer {
 		kafkaTimeout:         time.Second * 10, // 10s timeout when takling to kafka.,
 		logger:               logger,
 		obsChannel:           p.ObsChannel,
+		testMessageTopic:     p.TestMessageTopic,
 	}
 }
 
@@ -186,12 +187,15 @@ func (k *buffer) sendBatched() error {
 	return nil
 }
 
-// sendTestMessage sends a test message with the mqtt topic "test".
+// sendTestMessage sends a test message with the mqtt topic "test" (can be overridden using ENV).
 // You wanna ignore these messages in the Kafka consumers.
 func (k *buffer) sendTestMessage() error {
 	ctx, cancel := context.WithTimeout(context.Background(), k.kafkaTimeout)
 	defer cancel()
-	err := k.writer.WriteMessages(ctx, generateTestMessage())
+	err := k.writer.WriteMessages(ctx, generateTestMessage(k.testMessageTopic))
+	if err != nil {
+		return fmt.Errorf("error sending test message on topic '%s': %w", k.testMessageTopic, err)
+	}
 	return err
 }
 
@@ -199,9 +203,9 @@ func (k *buffer) updateLastSendAttempt() {
 	k.lastSendAttempt = time.Now()
 }
 
-func generateTestMessage() gokafka.Message {
+func generateTestMessage(topic string) gokafka.Message {
 	msg := Message{
-		Topic:   "test",
+		Topic:   topic,
 		Content: []byte("Internal test to see if kafka is alive at startup"),
 	}
 	msgJson, err := json.Marshal(msg)

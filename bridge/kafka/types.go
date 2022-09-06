@@ -22,6 +22,7 @@ type buffer struct {
 	failures             int
 	logger               *log.Entry
 	obsChannel           observability.Channel
+	testMessageTopic     string
 }
 
 type Message struct {
@@ -32,13 +33,14 @@ type Message struct {
 type MessageChan chan Message
 
 type Params struct {
-	Broker        string
-	Port          int
-	Channel       MessageChan
-	BatchSize     int
-	MaxBatchSize  int
-	Interval      time.Duration
-	Topic         string
-	ObsChannel    observability.Channel
-	RetryInterval time.Duration
+	Broker           string
+	Port             int
+	Channel          MessageChan
+	BatchSize        int
+	MaxBatchSize     int
+	Interval         time.Duration
+	Topic            string
+	ObsChannel       observability.Channel
+	RetryInterval    time.Duration
+	TestMessageTopic string
 }

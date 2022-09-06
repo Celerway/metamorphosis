@@ -161,6 +161,7 @@ func makeTestBuffer(writer *mockWriter) buffer {
 		kafkaTimeout:         25 * time.Millisecond,
 		logger:               logrus.WithFields(logrus.Fields{"module": "kafka", "instance": "test"}),
 		obsChannel:           obsChannel,
+		testMessageTopic:     "test",
 	}
 }
 

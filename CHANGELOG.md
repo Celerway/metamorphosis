@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.2.5](https://github.com/Celerway/metamorphosis/compare/v0.2.4...v0.2.5) (2022-09-06)
+
+
+### Bug Fixes
+
+* fix (unlikely) race condition during startup, when connecting to MQTT. If the connection is lost during before the subscription is issued then we get stuck in a loop. ([e4f469e](https://github.com/Celerway/metamorphosis/commit/e4f469ed7cb04dc1a7cf67c16664e896247fe639))
+
 ### [0.2.4](https://github.com/Celerway/metamorphosis/compare/v0.2.3...v0.2.4) (2022-06-08)
 
 

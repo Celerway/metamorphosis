@@ -36,4 +36,5 @@ type client struct {
 	topic      string
 	obsChannel observability.Channel
 	logger     *log.Entry
+	failChan   chan error
 }

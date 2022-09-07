@@ -39,6 +39,7 @@ func Initialize(p Params) *buffer {
 		logger:               logger,
 		obsChannel:           p.ObsChannel,
 		testMessageTopic:     p.TestMessageTopic,
+		FlushChannel:         make(chan string, 2),
 	}
 }
 
@@ -49,6 +50,7 @@ func (k *buffer) Run(ctx context.Context) error {
 		return fmt.Errorf("failed to send initial test message: %w", err)
 	}
 	ticker := time.NewTicker(k.interval)
+	defer ticker.Stop()
 	k.logger.Infof("Kafka interface started with write interval %v and batch size %d", k.interval, k.batchSize)
 loop:
 	for {
@@ -63,11 +65,11 @@ loop:
 		case m := <-k.C:
 			k.logger.Trace("Message received")
 			k.Enqueue(m)
+		case msg := <-k.FlushChannel:
+			k.logger.Info("Flush triggered:", msg)
+			k.Send(true)
 		}
 	}
-	ticker.Stop()
-	k.logger.Info("Final flush of the buffer")
-	k.Send(true)
 	return nil
 }
 
@@ -97,6 +99,7 @@ func (k *buffer) Enqueue(msg Message) {
 }
 
 // Send will send all messages in the buffer to the gokafka broker
+// set force to true to force sending even if the buffer is not full.
 func (k *buffer) Send(force bool) {
 
 	if len(k.buffer) == 0 {

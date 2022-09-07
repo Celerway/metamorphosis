@@ -23,6 +23,7 @@ type buffer struct {
 	logger               *log.Entry
 	obsChannel           observability.Channel
 	testMessageTopic     string
+	FlushChannel         chan string
 }
 
 type Message struct {

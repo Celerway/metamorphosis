@@ -113,7 +113,7 @@ func waitForAtomic(a *uint64, v uint64, timeout, sleeptime time.Duration) error 
 }
 
 func TestMain(m *testing.M) {
-	log.SetLevel(log.InfoLevel)
+	log.SetLevel(log.TraceLevel)
 	log.Debug("Running test suite")
 	ret := m.Run()
 	log.Debug("Test suite complete")
@@ -162,6 +162,7 @@ func makeTestBuffer(writer *mockWriter) buffer {
 		logger:               logrus.WithFields(logrus.Fields{"module": "kafka", "instance": "test"}),
 		obsChannel:           obsChannel,
 		testMessageTopic:     "test",
+		FlushChannel:         make(chan string),
 	}
 }
 
@@ -481,6 +482,36 @@ func TestBuffer_Batching_RecoveryInterrupted(t *testing.T) {
 
 	log.Debug("Done")
 
+}
+
+// Test that the kafka buffer handles flushing, which is used on shutdown
+func TestBuffer_Flush(t *testing.T) {
+	is := is2.New(t)
+	storage := &mockWriter{}
+	buffer := makeTestBuffer(storage)
+	defer close(buffer.obsChannel)
+	buffer.interval = time.Minute // Very long timeout
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		err := buffer.Run(ctx)
+		if err != nil {
+			log.Errorf("Error %s", err)
+		}
+		log.Info("buffer run complete")
+	}()
+	buffer.C <- makeMessage("test", 42)
+	time.Sleep(time.Millisecond)
+	is.Equal(atomic.LoadUint64(&storage.writes), uint64(1)) // The test message should have been written
+	is.Equal(atomic.LoadUint64(&storage.msgs), uint64(1))
+	buffer.FlushChannel <- "test the flushing"
+	time.Sleep(time.Millisecond)
+
+	is.Equal(atomic.LoadUint64(&storage.writes), uint64(2))
+	is.Equal(atomic.LoadUint64(&storage.msgs), uint64(2))
 }
 
 func makeMessage(topic string, id int) Message {

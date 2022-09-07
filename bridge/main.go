@@ -26,6 +26,7 @@ func Run(ctx context.Context, params Params) {
 	kafkaCtx, kafkaCancel := context.WithCancel(context.Background()) // Kafka, shutdown after mqtt.
 	obsCtx, obsCancel := context.WithCancel(context.Background())     // obs, needs to be shutdown last to avoid deadlocks.
 	obsChan := observability.GetChannel(channelSize)
+	errChan := make(chan error, 1)
 	br := bridge{
 		mqttCh:  make(mqtt.MessageChannel, channelSize),
 		kafkaCh: make(kafka.MessageChan, channelSize),
@@ -79,13 +80,19 @@ func Run(ctx context.Context, params Params) {
 		defer wg.Done()
 		err := kafkaWorker.Run(kafkaCtx)
 		if err != nil {
-			log.Fatalf("Could not initialize kafka worker: %s", err)
+			br.logger.Fatalf("Could not initialize kafka worker: %s", err)
 		}
 	}()
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		mqtt.Run(mqttCtx, mqttParams) // Then connect to MQTT
+		err := mqtt.Run(mqttCtx, mqttParams) // Then connect to MQTT
+		if err != nil {
+			// MQTT has failed. We need to flush and shutdown stuff.
+			kafkaWorker.FlushChannel <- "mqtt failed" // Flush any remaining messages.
+			br.logger.Errorf("MQTT failed: %s", err)
+			errChan <- err
+		}
 	}()
 	obs.Ready()
 
@@ -93,16 +100,20 @@ func Run(ctx context.Context, params Params) {
 	// If we wanna do something on a regular basis (log stats or whatnot)
 	// this is a good place.
 
-	<-ctx.Done()
+	// Wait for context cancellation or error.
+	select {
+	case <-ctx.Done():
+	case <-errChan:
+	}
 	br.logger.Warn("Context cancelled. Initiating shutdown.")
 	mqttCancel()
 	time.Sleep(time.Second)
-	close(br.mqttCh)            // Closing the channel will cause the mainloop to exit.
-	time.Sleep(3 * time.Second) // This should be enough to make sure Kafka is flushed out.
+	close(br.mqttCh)                          // Closing the channel will cause the mainloop to exit.
+	kafkaWorker.FlushChannel <- "final flush" // Flush any remaining messages.
+	time.Sleep(3 * time.Second)               // This should be enough to make sure Kafka is flushed out.
 	kafkaCancel()
-	obsCancel() // shuts down the HTTP server for obs.
-	obs.Cleanup()
-	wg.Wait() // Block and for us to shut down completely.
+	obsCancel() // shuts down the HTTP server for obs and cleans up prometheus.
+	wg.Wait()   // Block and for us to shut down completely.
 	br.logger.Warn("Bridge exiting")
 }
 

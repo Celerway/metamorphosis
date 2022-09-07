@@ -6,11 +6,10 @@ import (
 	"github.com/celerway/metamorphosis/bridge/observability"
 	paho "github.com/eclipse/paho.mqtt.golang"
 	log "github.com/sirupsen/logrus"
-	"os"
 	"time"
 )
 
-func Run(ctx context.Context, params Params) {
+func Run(ctx context.Context, params Params) error {
 	client := client{
 		broker:     params.Broker,
 		port:       params.Port,
@@ -20,6 +19,7 @@ func Run(ctx context.Context, params Params) {
 		ch:         params.Channel,
 		obsChannel: params.ObsChannel,
 		logger:     log.WithFields(log.Fields{"module": "mqtt"}),
+		failChan:   make(chan error, 1),
 	}
 	client.logger.Debugf("Starting MQTT Worker.")
 	client.logger.Debugf("Broker: %s:%d (tls: %v)", params.Broker, params.Port, params.Tls)
@@ -38,23 +38,33 @@ func Run(ctx context.Context, params Params) {
 	opts.SetOnConnectHandler(client.handleConnect)
 	pahoClient := paho.NewClient(opts)
 	client.paho = pahoClient
-	client.connect() // blocks and aborts on failure.
+	go client.connect() // Start the connection process.
 	client.logger.Info("Starting MQTT client worker")
-	client.mainloop(ctx)
+	return client.mainLoop(ctx) // wait for context to be cancelled or a fatal error to occur.
 }
 
-// mainloop
+// mainLoop
 // This is a goroutine. When you return it dies.
 // Connects to the MQTT broker, subscribes and processes messages.
 // All the works happens in the event handler.
-func (client *client) mainloop(ctx context.Context) {
-	// Here we start blocking the goroutine and wait for shutdown.
+func (client *client) mainLoop(ctx context.Context) error {
+	// Here we start blocking the goroutine and wait for shutdown or a fatal error.
 	// If we need to keep track of something we can wrap this in a loop
-	<-ctx.Done()
+	client.logger.Debug("Starting main loop.")
+	defer client.logger.Debug("Exiting main loop.")
+	select {
+	case <-ctx.Done():
+		client.logger.Info("MQTT client worker shutting down normally.")
+	case err := <-client.failChan:
+		client.logger.Errorf("MQTT client worker failed: %s", err)
+		client.paho.Disconnect(0)
+		return err
+	}
 	client.logger.Info("MQTT client context is cancelled. Shutting down.")
 	client.unsubscribe()
 	client.paho.Disconnect(100)
 	client.logger.Info("MQTT client exiting")
+	return nil
 }
 
 // connect to the broker. Blocks until the connection is established and the subscription is done.
@@ -89,7 +99,7 @@ func (client *client) connect() {
 	}
 	if !fullyConnected && attempts >= connectionAttempts {
 		client.logger.Errorf("Max number of connection attempt reached. Giving up and aborting.")
-		os.Exit(1)
+		client.failChan <- fmt.Errorf("max number (%d) of connection attempts reached", connectionAttempts)
 	}
 	client.logger.Infof("Worker '%v' connected to MQTT %s:%d", client.clientId, client.broker, client.port)
 }

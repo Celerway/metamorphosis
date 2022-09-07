@@ -59,7 +59,6 @@ func Run(ctx context.Context, params Params) {
 	obsParams := observability.Params{
 		Channel:    obsChan,
 		HealthPort: params.HealthPort,
-		WaitGroup:  &wg,
 	}
 	// Start the goroutines that do the work.
 	obs := observability.Initialize(obsParams) // Fire up obs.
@@ -101,7 +100,7 @@ func Run(ctx context.Context, params Params) {
 	close(br.mqttCh)            // Closing the channel will cause the mainloop to exit.
 	time.Sleep(3 * time.Second) // This should be enough to make sure Kafka is flushed out.
 	kafkaCancel()
-	obsCancel()
+	obsCancel() // shuts down the HTTP server for obs.
 	obs.Cleanup()
 	wg.Wait() // Block and for us to shut down completely.
 	br.logger.Warn("Bridge exiting")

@@ -202,7 +202,6 @@ func TestBuffer_Process_fail(t *testing.T) {
 	storage := &mockWriter{}
 	ctx, cancel := context.WithCancel(context.Background())
 	buffer := makeTestBuffer(storage)
-	defer close(buffer.obsChannel)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
@@ -259,7 +258,6 @@ func TestBuffer_deadlock(t *testing.T) {
 	storage := &mockWriter{}
 	storage.setDeadlock(true)
 	buffer := makeTestBuffer(storage)
-	defer close(buffer.obsChannel)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -302,7 +300,6 @@ func TestBuffer_Process_slow(t *testing.T) {
 	storage.setDelay(2*time.Millisecond, time.Microsecond*20)
 	ctx, cancel := context.WithCancel(context.Background())
 	buffer := makeTestBuffer(storage)
-	defer close(buffer.obsChannel)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
@@ -339,12 +336,15 @@ func TestBuffer_Process_slow(t *testing.T) {
 }
 
 func TestBuffer_Batching(t *testing.T) {
-	const batchSize = 100
-	const totalMsgs = 10000
+	const (
+		batchSize      int    = 100
+		totalMsgs      uint64 = 999
+		expectedWrites uint64 = 11
+		expectedMsgs   uint64 = totalMsgs + 1
+	)
 
 	storage := &mockWriter{}
 	buffer := makeTestBuffer(storage)
-	defer close(buffer.obsChannel)
 	buffer.batchSize = batchSize
 	buffer.maxBatchSize = 1000
 	ctx, cancel := context.WithCancel(context.Background())
@@ -358,26 +358,27 @@ func TestBuffer_Batching(t *testing.T) {
 		}
 		log.Info("buffer run complete")
 	}()
-	storage.setState(false)
-	for i := 0; i < totalMsgs; i++ {
-		buffer.C <- makeMessage("test", i)
+	for i := uint64(0); i < totalMsgs; i++ {
+		buffer.C <- makeMessage("test", int(i))
 	}
-	storage.setState(false)
+
 	start := time.Now()
-	err := waitForAtomic(&storage.msgs, totalMsgs+1, time.Millisecond*500, time.Millisecond)
+	err := waitForAtomic(&storage.msgs, expectedMsgs, time.Millisecond*500, time.Millisecond)
 	dur := time.Since(start)
 	log.Info("Duration: ", dur)
 	if err != nil {
 		dumpLogs()
 		t.Errorf("waitForAtomic Error %s", err)
 	}
-	if atomic.LoadUint64(&storage.writes) != batchSize+1 {
+	writesDone := atomic.LoadUint64(&storage.writes)
+	if writesDone != expectedWrites {
 		dumpLogs()
-		t.Errorf("Wrong number of batched writes: %d", atomic.LoadUint64(&storage.writes))
+		t.Errorf("Wrong number of batched writes: %d, expected %d", writesDone, expectedWrites)
 	}
-	if atomic.LoadUint64(&storage.msgs) != totalMsgs+1 {
+	msgDone := atomic.LoadUint64(&storage.msgs)
+	if msgDone != totalMsgs+1 {
 		dumpLogs()
-		t.Errorf("Wrong number of messages: %d", atomic.LoadUint64(&storage.msgs))
+		t.Errorf("Wrong number of messages: %d expected %d", msgDone, expectedMsgs)
 	}
 	cancel()
 	wg.Wait()
@@ -391,7 +392,6 @@ func TestBuffer_Batching_Recovery(t *testing.T) {
 	is := is2.New(t)
 	storage := &mockWriter{}
 	buffer := makeTestBuffer(storage)
-	defer close(buffer.obsChannel)
 	buffer.batchSize = 100
 	buffer.maxBatchSize = 1000
 	ctx, cancel := context.WithCancel(context.Background())
@@ -437,7 +437,6 @@ func TestBuffer_Batching_RecoveryInterrupted(t *testing.T) {
 	is := is2.New(t)
 	storage := &mockWriter{}
 	buffer := makeTestBuffer(storage)
-	defer close(buffer.obsChannel)
 	buffer.batchSize = 10
 	buffer.maxBatchSize = 100
 	storage.batchDelay = time.Millisecond
@@ -489,7 +488,6 @@ func TestBuffer_Flush(t *testing.T) {
 	is := is2.New(t)
 	storage := &mockWriter{}
 	buffer := makeTestBuffer(storage)
-	defer close(buffer.obsChannel)
 	buffer.interval = time.Minute // Very long timeout
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -509,7 +507,33 @@ func TestBuffer_Flush(t *testing.T) {
 	is.Equal(atomic.LoadUint64(&storage.msgs), uint64(1))
 	buffer.FlushChannel <- "test the flushing"
 	time.Sleep(time.Millisecond)
+	is.Equal(atomic.LoadUint64(&storage.writes), uint64(2))
+	is.Equal(atomic.LoadUint64(&storage.msgs), uint64(2))
+}
 
+func TestBuffer_FlushOnShutdown(t *testing.T) {
+	is := is2.New(t)
+	storage := &mockWriter{}
+	buffer := makeTestBuffer(storage)
+	buffer.interval = time.Minute // Very long timeout
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		err := buffer.Run(ctx)
+		if err != nil {
+			log.Errorf("Error %s", err)
+		}
+		log.Info("buffer run complete")
+	}()
+	buffer.C <- makeMessage("test", 42)
+	time.Sleep(time.Millisecond)
+	is.Equal(atomic.LoadUint64(&storage.writes), uint64(1)) // The test message should have been written
+	is.Equal(atomic.LoadUint64(&storage.msgs), uint64(1))
+	cancel()
+	time.Sleep(time.Millisecond)
 	is.Equal(atomic.LoadUint64(&storage.writes), uint64(2))
 	is.Equal(atomic.LoadUint64(&storage.msgs), uint64(2))
 }

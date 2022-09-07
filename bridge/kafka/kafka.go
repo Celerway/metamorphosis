@@ -70,6 +70,8 @@ loop:
 			k.Send(true)
 		}
 	}
+	k.logger.Info("Flushing remaining messages")
+	k.Send(true)
 	return nil
 }
 

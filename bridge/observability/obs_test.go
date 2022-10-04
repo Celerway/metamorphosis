@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"sync"
 	"testing"
+	"time"
 )
 
 const obsPort = 2000
@@ -32,7 +33,7 @@ func Test_observability_Run(t *testing.T) {
 		defer wg.Done()
 		obs.Run(ctx)
 	}()
-
+	time.Sleep(10 * time.Millisecond)
 	metrics, err := getMetrics(obsPort)
 	is.NoErr(err)
 	metricNames := []string{"mqtt_received", "mqtt_errors", "kafka_sent", "kafka_errors", "kafka_state"}

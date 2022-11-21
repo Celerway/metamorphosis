@@ -6,7 +6,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	log "github.com/sirupsen/logrus"
+	logus "github.com/sirupsen/logrus"
 	"net/http"
 	"sync"
 	"time"
@@ -35,7 +35,7 @@ func (obs observability) Run(ctx context.Context) {
 		obs.Cleanup()
 	}()
 	wg.Wait()
-	log.Info("Observability worker is done")
+	logus.Info("Observability worker is done")
 }
 
 func Initialize(params Params) *observability {
@@ -43,7 +43,7 @@ func Initialize(params Params) *observability {
 
 	obs := observability{
 		channel:    params.Channel,
-		logger:     log.WithFields(log.Fields{"module": "observability"}),
+		logger:     logus.WithFields(logus.Fields{"module": "observability"}),
 		healthPort: params.HealthPort,
 		promReg:    reg,
 	}

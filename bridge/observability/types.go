@@ -2,7 +2,7 @@ package observability
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
-	log "github.com/sirupsen/logrus"
+	logrus "github.com/sirupsen/logrus"
 )
 
 type Channel chan StatusMessage
@@ -32,7 +32,7 @@ type observability struct {
 	kafkaSent    prometheus.Counter
 	kafkaErrors  prometheus.Counter
 	kafkaState   prometheus.Gauge
-	logger       *log.Entry
+	logger       *logrus.Entry
 	ready        bool
 	healthPort   int
 	promReg      *prometheus.Registry

@@ -3,7 +3,7 @@ package kafka
 import (
 	"github.com/celerway/metamorphosis/bridge/observability"
 	gokafka "github.com/segmentio/kafka-go"
-	log "github.com/sirupsen/logrus"
+	logrus "github.com/sirupsen/logrus"
 	"time"
 )
 
@@ -20,7 +20,7 @@ type buffer struct {
 	topic                string
 	kafkaTimeout         time.Duration
 	failures             int
-	logger               *log.Entry
+	logger               *logrus.Entry
 	obsChannel           observability.Channel
 	testMessageTopic     string
 }

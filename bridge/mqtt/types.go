@@ -4,7 +4,7 @@ import (
 	"crypto/tls"
 	"github.com/celerway/metamorphosis/bridge/observability"
 	paho "github.com/eclipse/paho.mqtt.golang"
-	log "github.com/sirupsen/logrus"
+	logrus "github.com/sirupsen/logrus"
 )
 
 type Params struct {
@@ -35,5 +35,5 @@ type client struct {
 	ch         MessageChannel
 	topic      string
 	obsChannel observability.Channel
-	logger     *log.Entry
+	logger     *logrus.Entry
 }

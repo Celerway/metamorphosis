@@ -8,7 +8,7 @@ import (
 	"github.com/celerway/metamorphosis/bridge/kafka"
 	"github.com/celerway/metamorphosis/bridge/mqtt"
 	"github.com/celerway/metamorphosis/bridge/observability"
-	log "github.com/sirupsen/logrus"
+	logrus "github.com/sirupsen/logrus"
 	"io/ioutil"
 	"sync"
 	"time"
@@ -29,7 +29,7 @@ func Run(ctx context.Context, params Params) {
 	br := bridge{
 		mqttCh:  make(mqtt.MessageChannel, channelSize),
 		kafkaCh: make(kafka.MessageChan, channelSize),
-		logger:  log.WithFields(log.Fields{"module": "bridge"}),
+		logger:  logrus.WithFields(logrus.Fields{"module": "bridge"}),
 	}
 	if params.MqttTls {
 		tlsConfig = NewTlsConfig(params.TlsRootCrtFile, params.MqttClientCertFile, params.MqttClientKeyFile, br.logger)
@@ -79,7 +79,7 @@ func Run(ctx context.Context, params Params) {
 		defer wg.Done()
 		err := kafkaWorker.Run(kafkaCtx)
 		if err != nil {
-			log.Fatalf("Could not initialize kafka worker: %s", err)
+			logrus.Fatalf("Could not initialize kafka worker: %s", err)
 		}
 	}()
 	wg.Add(1)
@@ -106,11 +106,11 @@ func Run(ctx context.Context, params Params) {
 	br.logger.Warn("Bridge exiting")
 }
 
-func NewTlsConfig(caFile, clientCertFile, clientKeyFile string, logger *log.Entry) *tls.Config {
+func NewTlsConfig(caFile, clientCertFile, clientKeyFile string, logger *logrus.Entry) *tls.Config {
 	certPool := x509.NewCertPool()
 	ca, err := ioutil.ReadFile(caFile)
 	if err != nil {
-		log.Fatalln(err.Error())
+		logrus.Fatalln(err.Error())
 	}
 	certPool.AppendCertsFromPEM(ca)
 	// Import client certificate/key pair

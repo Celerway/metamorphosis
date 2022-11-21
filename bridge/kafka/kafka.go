@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"github.com/celerway/metamorphosis/bridge/observability"
 	gokafka "github.com/segmentio/kafka-go"
-	log "github.com/sirupsen/logrus"
+	logrus "github.com/sirupsen/logrus"
 	"strconv"
 	"time"
 )
 
 func Initialize(p Params) *buffer {
-	logger := log.WithFields(log.Fields{"module": "kafka"})
+	logger := logrus.WithFields(logrus.Fields{"module": "kafka"})
 	brokerAddr := gokafka.TCP(p.Broker + ":" + strconv.FormatInt(int64(p.Port), 10))
 	writer := &gokafka.Writer{
 		Addr:         brokerAddr,
@@ -211,7 +211,7 @@ func generateTestMessage(topic string) gokafka.Message {
 	msgJson, err := json.Marshal(msg)
 	if err != nil {
 		// something is very wrong. bail out.
-		log.Fatalf("mashalling test message: %s", err)
+		logrus.Fatalf("mashalling test message: %s", err)
 	}
 	testMsg := gokafka.Message{
 		Value: msgJson,

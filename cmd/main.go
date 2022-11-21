@@ -6,7 +6,7 @@ import (
 	"flag"
 	"github.com/celerway/metamorphosis/bridge"
 	"github.com/joho/godotenv"
-	log "github.com/sirupsen/logrus"
+	logrus "github.com/sirupsen/logrus"
 	"os"
 	"os/signal"
 	"strconv"
@@ -41,9 +41,9 @@ func main() {
 	)
 
 	err := godotenv.Load()
-	log.Infof("Metamorphosis %s starting up.", embeddedVersion)
+	logrus.Infof("Metamorphosis %s starting up.", embeddedVersion)
 	if err != nil {
-		log.Infof("Error loading .env file, assuming production: %s", err.Error())
+		logrus.Infof("Error loading .env file, assuming production: %s", err.Error())
 	}
 
 	flag.StringVar(&logLevel, "log-level",
@@ -111,8 +111,8 @@ func main() {
 		HealthPort:         healthPort,
 		TestMessageTopic:   testMessageTopic,
 	}
-	log.Infof("Startup options: %v", runConfig)
-	log.Debug("Starting bridge")
+	logrus.Infof("Startup options: %v", runConfig)
+	logrus.Debug("Starting bridge")
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 	wg := sync.WaitGroup{}
@@ -122,13 +122,13 @@ func main() {
 		bridge.Run(ctx, runConfig)
 	}()
 	wg.Wait()
-	log.Debug("Waiting over. Exiting.")
+	logrus.Debug("Waiting over. Exiting.")
 
 }
 
 func CheckSet(s, name, reason string) {
 	if s == "" {
-		log.Fatalf("%s can't be empty when %s", name, reason)
+		logrus.Fatalf("%s can't be empty when %s", name, reason)
 	}
 }
 
@@ -143,7 +143,7 @@ func LookupEnvOrInt(key string, defaultVal int) int {
 	if val, ok := os.LookupEnv(key); ok {
 		v, err := strconv.Atoi(val)
 		if err != nil {
-			log.Fatalf("LookupEnvOrInt[%s]: %v", key, err)
+			logrus.Fatalf("LookupEnvOrInt[%s]: %v", key, err)
 		}
 		return v
 	}
@@ -159,20 +159,20 @@ func LookupEnvOrBool(key string, defaultVal bool) bool {
 func setLoglevel(level string) {
 	switch level {
 	case "": // Default choice.
-		log.SetLevel(log.InfoLevel)
+		logrus.SetLevel(logrus.InfoLevel)
 	case "trace":
-		log.SetLevel(log.TraceLevel)
+		logrus.SetLevel(logrus.TraceLevel)
 	case "debug":
-		log.SetLevel(log.DebugLevel)
+		logrus.SetLevel(logrus.DebugLevel)
 	case "info":
-		log.SetLevel(log.InfoLevel)
+		logrus.SetLevel(logrus.InfoLevel)
 	case "warn":
-		log.SetLevel(log.WarnLevel)
+		logrus.SetLevel(logrus.WarnLevel)
 	case "error":
-		log.SetLevel(log.ErrorLevel)
+		logrus.SetLevel(logrus.ErrorLevel)
 	default:
-		log.Errorf("Unknown loglevel: %s", level)
+		logrus.Errorf("Unknown loglevel: %s", level)
 		os.Exit(1)
 	}
-	log.Debugf("Log level set to %s", level)
+	logrus.Debugf("Log level set to %s", level)
 }

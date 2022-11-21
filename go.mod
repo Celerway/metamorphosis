@@ -4,7 +4,6 @@ go 1.18
 
 require (
 	github.com/Shopify/toxiproxy/v2 v2.4.0
-	github.com/celerway/chainsaw v0.0.0-20211219154652-008b7204929c
 	github.com/eclipse/paho.mqtt.golang v1.3.4
 	github.com/joho/godotenv v1.3.0
 	github.com/matryer/is v1.4.0
@@ -12,7 +11,6 @@ require (
 	github.com/prometheus/client_model v0.2.0
 	github.com/prometheus/common v0.32.1
 	github.com/segmentio/kafka-go v0.4.32
-	github.com/sirupsen/logrus v1.8.1
 )
 
 require (

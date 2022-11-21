@@ -3,8 +3,8 @@ package mqtt
 import (
 	"crypto/tls"
 	"github.com/celerway/metamorphosis/bridge/observability"
+	"github.com/celerway/metamorphosis/log"
 	paho "github.com/eclipse/paho.mqtt.golang"
-	logrus "github.com/sirupsen/logrus"
 )
 
 type Params struct {
@@ -35,5 +35,5 @@ type client struct {
 	ch         MessageChannel
 	topic      string
 	obsChannel observability.Channel
-	logger     *logrus.Entry
+	logger     *log.Logger
 }

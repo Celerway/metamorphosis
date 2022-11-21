@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 	"github.com/celerway/metamorphosis/bridge/observability"
+	"github.com/celerway/metamorphosis/log"
 	paho "github.com/eclipse/paho.mqtt.golang"
-	logrus "github.com/sirupsen/logrus"
 	"os"
 	"time"
 )
@@ -19,7 +19,7 @@ func Run(ctx context.Context, params Params) {
 		tls:        params.Tls,
 		ch:         params.Channel,
 		obsChannel: params.ObsChannel,
-		logger:     logrus.WithFields(logrus.Fields{"module": "mqtt"}),
+		logger:     log.NewWithPrefix(os.Stdout, os.Stderr, "mqtt"),
 	}
 	client.logger.Debugf("Starting MQTT Worker.")
 	client.logger.Debugf("Broker: %s:%d (tls: %v)", params.Broker, params.Port, params.Tls)

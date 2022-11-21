@@ -6,8 +6,8 @@ import (
 	"fmt"
 	toxiproxy "github.com/Shopify/toxiproxy/v2/client"
 	"github.com/celerway/metamorphosis/bridge/observability"
+	"github.com/celerway/metamorphosis/log"
 	is2 "github.com/matryer/is"
-	logrus "github.com/sirupsen/logrus"
 	"os"
 	"os/exec"
 	"sync"
@@ -18,8 +18,7 @@ import (
 var toxiClient *toxiproxy.Client
 
 func TestMain(m *testing.M) {
-	logrus.SetLevel(logrus.InfoLevel)
-	logrus.SetFormatter(&logrus.TextFormatter{})
+	log.SetLevel(log.InfoLevel)
 	// Setup test environment, mosquitto server
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -43,7 +42,7 @@ func TestMain(m *testing.M) {
 	toxiClient = toxiproxy.NewClient("http://localhost:8474")
 	proxy, err := toxiClient.CreateProxy("mqtt", listen, upstreamService)
 	if err != nil {
-		logrus.Fatal("creating Toxi Proxy: ", err)
+		log.Fatal("creating Toxi Proxy: ", err)
 	}
 	defer proxy.Delete()
 
@@ -137,13 +136,13 @@ func runMosquitto(ctx context.Context) {
 	cmd.Stderr = buffer
 	err := cmd.Start()
 	if err != nil {
-		logrus.Fatalf("Error running mosquitto: %v", err)
+		log.Fatalf("Error running mosquitto: %v", err)
 	}
 	<-ctx.Done()
 	// context cancelled. Kill the process
 	err = cmd.Process.Signal(os.Interrupt)
 	if err != nil {
-		logrus.Errorf("Error killing mosquitto: %v", err)
+		log.Errorf("Error killing mosquitto: %v", err)
 	}
 	_ = cmd.Wait()
 	_ = cmd.Process.Kill()
@@ -158,13 +157,13 @@ func runToxy(ctx context.Context) {
 	cmd.Stderr = buffer
 	err := cmd.Start()
 	if err != nil {
-		logrus.Fatalf("Error running toxiproxy: %v", err)
+		log.Fatalf("Error running toxiproxy: %v", err)
 	}
 	<-ctx.Done()
 	// context cancelled. Kill the process
 	err = cmd.Process.Signal(os.Interrupt)
 	if err != nil {
-		logrus.Errorf("Error killing mosquitto: %v", err)
+		log.Errorf("Error killing mosquitto: %v", err)
 	}
 	_ = cmd.Wait()
 	_ = cmd.Process.Kill()

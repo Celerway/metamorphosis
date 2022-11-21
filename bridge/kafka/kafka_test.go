@@ -5,11 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	log "github.com/celerway/chainsaw"
 	"github.com/celerway/metamorphosis/bridge/observability"
+	"github.com/celerway/metamorphosis/log"
 	is2 "github.com/matryer/is"
 	"github.com/segmentio/kafka-go"
-	logrus "github.com/sirupsen/logrus"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -159,7 +158,6 @@ func makeTestBuffer(writer *mockWriter) buffer {
 		batchSize:            5,
 		maxBatchSize:         20,
 		kafkaTimeout:         25 * time.Millisecond,
-		logger:               logrus.WithFields(logrus.Fields{"module": "kafka", "instance": "test"}),
 		obsChannel:           obsChannel,
 		testMessageTopic:     "test",
 	}
@@ -492,10 +490,12 @@ func makeMessage(topic string, id int) Message {
 
 func dumpLogs() {
 	fmt.Println("====== dumping logs ======")
-	msgs := log.GetMessages(log.TraceLevel)
-	for _, m := range msgs {
-		fmt.Printf("%s: %s %s\n", m.LogLevel.String(), m.TimeStamp.Format(time.RFC3339), m.Message)
-	}
+	/*
+		msgs := log.GetMessages(log.TraceLevel)
+		for _, m := range msgs {
+			fmt.Printf("%s: %s %s\n", m.LogLevel.String(), m.TimeStamp.Format(time.RFC3339), m.Message)
+		}
+	*/
 	fmt.Println("====== end of dump ======")
 
 }

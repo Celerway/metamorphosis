@@ -5,14 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/celerway/metamorphosis/bridge/observability"
+	"github.com/celerway/metamorphosis/log"
 	gokafka "github.com/segmentio/kafka-go"
-	logrus "github.com/sirupsen/logrus"
+	"os"
 	"strconv"
 	"time"
 )
 
 func Initialize(p Params) *buffer {
-	logger := logrus.WithFields(logrus.Fields{"module": "kafka"})
 	brokerAddr := gokafka.TCP(p.Broker + ":" + strconv.FormatInt(int64(p.Port), 10))
 	writer := &gokafka.Writer{
 		Addr:         brokerAddr,
@@ -24,7 +24,7 @@ func Initialize(p Params) *buffer {
 		Async:        false,
 		Compression:  0,
 		Logger:       nil,
-		ErrorLogger:  logger,
+		ErrorLogger:  log.NewWithPrefix(os.Stdout, os.Stderr, "kafka-internal"),
 	}
 	return &buffer{
 		batchSize:            p.BatchSize,
@@ -36,7 +36,7 @@ func Initialize(p Params) *buffer {
 		writer:               writer,
 		maxBatchSize:         p.MaxBatchSize,
 		kafkaTimeout:         time.Second * 10, // 10s timeout when takling to kafka.,
-		logger:               logger,
+		logger:               log.NewWithPrefix(os.Stdout, os.Stderr, "kafka"),
 		obsChannel:           p.ObsChannel,
 		testMessageTopic:     p.TestMessageTopic,
 	}
@@ -211,7 +211,7 @@ func generateTestMessage(topic string) gokafka.Message {
 	msgJson, err := json.Marshal(msg)
 	if err != nil {
 		// something is very wrong. bail out.
-		logrus.Fatalf("mashalling test message: %s", err)
+		log.Fatalf("mashalling test message: %s", err)
 	}
 	testMsg := gokafka.Message{
 		Value: msgJson,

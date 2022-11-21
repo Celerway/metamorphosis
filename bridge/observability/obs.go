@@ -3,11 +3,12 @@ package observability
 import (
 	"context"
 	"fmt"
+	"github.com/celerway/metamorphosis/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	logus "github.com/sirupsen/logrus"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 )
@@ -35,15 +36,14 @@ func (obs observability) Run(ctx context.Context) {
 		obs.Cleanup()
 	}()
 	wg.Wait()
-	logus.Info("Observability worker is done")
+	log.Info("Observability worker is done")
 }
 
 func Initialize(params Params) *observability {
 	reg := prometheus.NewRegistry()
-
 	obs := observability{
 		channel:    params.Channel,
-		logger:     logus.WithFields(logus.Fields{"module": "observability"}),
+		logger:     log.NewWithPrefix(os.Stdout, os.Stderr, "observability"),
 		healthPort: params.HealthPort,
 		promReg:    reg,
 	}

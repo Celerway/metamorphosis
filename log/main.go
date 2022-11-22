@@ -37,25 +37,27 @@ type Logger struct {
 	fatalLogger golog.Logger
 }
 
+const defaultOpts = golog.LstdFlags | golog.Lmsgprefix
+
 func NewLogger(infoOutput, errorOutput io.Writer) *Logger {
 	l := &Logger{
-		traceLogger: *golog.New(infoOutput, "trace", golog.LstdFlags),
-		debugLogger: *golog.New(infoOutput, "debug", golog.LstdFlags),
-		infoLogger:  *golog.New(infoOutput, "info", golog.LstdFlags),
-		warnLogger:  *golog.New(errorOutput, "warn", golog.LstdFlags),
-		errorLogger: *golog.New(errorOutput, "error", golog.LstdFlags),
-		fatalLogger: *golog.New(errorOutput, "fatal", golog.LstdFlags),
+		traceLogger: *golog.New(infoOutput, "trace ", defaultOpts),
+		debugLogger: *golog.New(infoOutput, "debug ", defaultOpts),
+		infoLogger:  *golog.New(infoOutput, "info ", defaultOpts),
+		warnLogger:  *golog.New(errorOutput, "warn ", defaultOpts),
+		errorLogger: *golog.New(errorOutput, "error ", defaultOpts),
+		fatalLogger: *golog.New(errorOutput, "fatal ", defaultOpts),
 	}
 	return l
 }
 func NewWithPrefix(infoOutput, errorOutput io.Writer, prefix string) *Logger {
 	l := &Logger{
-		traceLogger: *golog.New(infoOutput, prefix+" trace", golog.LstdFlags),
-		debugLogger: *golog.New(infoOutput, prefix+" debug", golog.LstdFlags),
-		infoLogger:  *golog.New(infoOutput, prefix+" info", golog.LstdFlags),
-		warnLogger:  *golog.New(errorOutput, prefix+" warn", golog.LstdFlags),
-		errorLogger: *golog.New(errorOutput, prefix+" error", golog.LstdFlags),
-		fatalLogger: *golog.New(errorOutput, prefix+" fatal", golog.LstdFlags),
+		traceLogger: *golog.New(infoOutput, prefix+" trace ", defaultOpts),
+		debugLogger: *golog.New(infoOutput, prefix+" debug ", defaultOpts),
+		infoLogger:  *golog.New(infoOutput, prefix+" info ", defaultOpts),
+		warnLogger:  *golog.New(errorOutput, prefix+" warn ", defaultOpts),
+		errorLogger: *golog.New(errorOutput, prefix+" error ", defaultOpts),
+		fatalLogger: *golog.New(errorOutput, prefix+" fatal ", defaultOpts),
 	}
 	return l
 }

@@ -123,7 +123,7 @@ func TestMain(m *testing.M) {
 func TestBuffer_Run(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	storage := &mockWriter{}
-	buffer := makeTestBuffer(storage)
+	buffer := makeTestBuffer(storage, defaultLogger())
 	defer close(buffer.obsChannel)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
@@ -142,7 +142,13 @@ func TestBuffer_Run(t *testing.T) {
 	log.Debug("Done")
 }
 
-func makeTestBuffer(writer *mockWriter) buffer {
+func defaultLogger() *log.Logger {
+	logger := log.NewLogger(os.Stdout, os.Stderr)
+	logger.SetLevel(log.DebugLevel)
+	return logger
+}
+
+func makeTestBuffer(writer *mockWriter, logger *log.Logger) buffer {
 	obsChannel := make(observability.Channel)
 	go func() { // service the obs channel.
 		for range obsChannel {
@@ -160,6 +166,7 @@ func makeTestBuffer(writer *mockWriter) buffer {
 		kafkaTimeout:         25 * time.Millisecond,
 		obsChannel:           obsChannel,
 		testMessageTopic:     "test",
+		logger:               logger,
 	}
 }
 
@@ -168,7 +175,7 @@ func TestBuffer_Process_ok(t *testing.T) {
 	is := is2.New(t)
 	storage := &mockWriter{}
 	ctx, cancel := context.WithCancel(context.Background())
-	buffer := makeTestBuffer(storage)
+	buffer := makeTestBuffer(storage, defaultLogger())
 	defer close(buffer.obsChannel)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
@@ -198,7 +205,7 @@ func TestBuffer_Process_ok(t *testing.T) {
 func TestBuffer_Process_fail(t *testing.T) {
 	storage := &mockWriter{}
 	ctx, cancel := context.WithCancel(context.Background())
-	buffer := makeTestBuffer(storage)
+	buffer := makeTestBuffer(storage, defaultLogger())
 	defer close(buffer.obsChannel)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
@@ -242,7 +249,7 @@ func TestBuffer_Process_initial_fail(t *testing.T) {
 	storage.setState(true)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	buffer := makeTestBuffer(storage)
+	buffer := makeTestBuffer(storage, defaultLogger())
 	defer close(buffer.obsChannel)
 	err := buffer.Run(ctx)
 	is.True(err != nil) // should be error
@@ -255,7 +262,7 @@ func TestBuffer_deadlock(t *testing.T) {
 	is.True(true)
 	storage := &mockWriter{}
 	storage.setDeadlock(true)
-	buffer := makeTestBuffer(storage)
+	buffer := makeTestBuffer(storage, defaultLogger())
 	defer close(buffer.obsChannel)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
@@ -298,7 +305,7 @@ func TestBuffer_Process_slow(t *testing.T) {
 
 	storage.setDelay(2*time.Millisecond, time.Microsecond*20)
 	ctx, cancel := context.WithCancel(context.Background())
-	buffer := makeTestBuffer(storage)
+	buffer := makeTestBuffer(storage, defaultLogger())
 	defer close(buffer.obsChannel)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
@@ -317,7 +324,6 @@ func TestBuffer_Process_slow(t *testing.T) {
 	log.Info("Messages are sent")
 	err := waitForAtomic(&storage.msgs, noOfMessages+1, time.Millisecond*5000, time.Millisecond)
 	if err != nil {
-		dumpLogs()
 		t.Errorf("Error %s", err)
 	}
 	cancel()
@@ -340,7 +346,7 @@ func TestBuffer_Batching(t *testing.T) {
 	const totalMsgs = 10000
 
 	storage := &mockWriter{}
-	buffer := makeTestBuffer(storage)
+	buffer := makeTestBuffer(storage, defaultLogger())
 	defer close(buffer.obsChannel)
 	buffer.batchSize = batchSize
 	buffer.maxBatchSize = 1000
@@ -365,15 +371,12 @@ func TestBuffer_Batching(t *testing.T) {
 	dur := time.Since(start)
 	log.Info("Duration: ", dur)
 	if err != nil {
-		dumpLogs()
 		t.Errorf("waitForAtomic Error %s", err)
 	}
 	if atomic.LoadUint64(&storage.writes) != batchSize+1 {
-		dumpLogs()
 		t.Errorf("Wrong number of batched writes: %d", atomic.LoadUint64(&storage.writes))
 	}
 	if atomic.LoadUint64(&storage.msgs) != totalMsgs+1 {
-		dumpLogs()
 		t.Errorf("Wrong number of messages: %d", atomic.LoadUint64(&storage.msgs))
 	}
 	cancel()
@@ -387,7 +390,7 @@ func TestBuffer_Batching(t *testing.T) {
 func TestBuffer_Batching_Recovery(t *testing.T) {
 	is := is2.New(t)
 	storage := &mockWriter{}
-	buffer := makeTestBuffer(storage)
+	buffer := makeTestBuffer(storage, defaultLogger())
 	defer close(buffer.obsChannel)
 	buffer.batchSize = 100
 	buffer.maxBatchSize = 1000
@@ -433,7 +436,7 @@ func TestBuffer_Batching_RecoveryInterrupted(t *testing.T) {
 	const count = 1000
 	is := is2.New(t)
 	storage := &mockWriter{}
-	buffer := makeTestBuffer(storage)
+	buffer := makeTestBuffer(storage, defaultLogger())
 	defer close(buffer.obsChannel)
 	buffer.batchSize = 10
 	buffer.maxBatchSize = 100
@@ -486,16 +489,4 @@ func makeMessage(topic string, id int) Message {
 		Topic:   topic,
 		Content: []byte(fmt.Sprintf("%d", id)),
 	}
-}
-
-func dumpLogs() {
-	fmt.Println("====== dumping logs ======")
-	/*
-		msgs := log.GetMessages(log.TraceLevel)
-		for _, m := range msgs {
-			fmt.Printf("%s: %s %s\n", m.LogLevel.String(), m.TimeStamp.Format(time.RFC3339), m.Message)
-		}
-	*/
-	fmt.Println("====== end of dump ======")
-
 }

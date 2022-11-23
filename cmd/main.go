@@ -24,8 +24,8 @@ func main() {
 		mqttBroker           string
 		mqttPort             int = 8883
 		mqttTopic            string
-		mqttTls              bool   = true
-		mqttClientId         string = "metamorphosis"
+		mqttTls              bool = true
+		mqttClientId         string
 		caRootCertFile       string
 		mqttCaClientCertFile string
 		mqttCaClientKeyFile  string
@@ -91,6 +91,17 @@ func main() {
 		}
 		log.Infof("Setting log level to %s", logLevel.String())
 		log.SetLevel(logLevel)
+	}
+
+	// check if MQTT client id is set, if not, use hostname as the ID
+	if mqttClientId == "" {
+		hostname, err := os.Hostname()
+		if err != nil {
+			log.Fatalf("Error getting hostname: %s", err.Error())
+		}
+		// chop off the domain name
+		hostname = strings.Split(hostname, ".")[0]
+		mqttClientId = hostname
 	}
 
 	if mqttTls {

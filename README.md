@@ -2,26 +2,29 @@
 
 A simple MQTT -> Kafka bridge and concentrator. Note that we'll use 
 [Red Panda](https://github.com/vectorizedio/redpanda) instead of Kafka. It is simpler (no zookeeper) 
-and faster (no JVM), and claims protocol compatibility with Kafka. You should consider it.
+and faster (no JVM), and claims protocol compatibility with Kafka. You should consider it. Note that Metamorphosis 
+uses packages written for Kafka, so it is likely to work just as well with Kafka.
 
 This is a protocol bridge between MQTT and Kafka. It'll connect to a broker, using HOSTNAME as the client ID, 
-subscription and listen for messages. When a message is received, we'll give it to kafka. It is meant to
-be running in a k8s pod.
+subscription and listen for messages. When a message is received it is placed in a buffer and written to Kafka 
+either based on message volume or given an interval. 
 
-If Kafka is unavailable we'll try to spool the messages to memory, so they can be recovered. If we can't write 
-to Kafka, we'll retry every 10 seconds. Once we reconnect, we dump all the messages we have.
+Upon startup it can, if configured to do so, issue a message to Kafka. This can be very useful as any misconfiguration 
+will then be immediately detected. If this initial message can't be sent Metamorphosis will exit with an error.
 
-Once Kafka and MQTT are connected, Metamorphosis will listen on `HEALTH_PORT` (cleartext http) and deliver metrics if a
+When up and running Metamorphosis will listen for messages on the configured MQTT topic and write them to Kafka. Note 
+that what we get from MQTT is binary data so the messages written to Kafka will be base64 encoded. 
+
+If Kafka becomes unavailable we'll try to spool the messages to memory, so they can be recovered. It will retry every 10 
+seconds. Once we reconnect, it'll dump all the messages we have buffered.
+
+Metamorphosis will listen on `HEALTH_PORT` (cleartext http) and deliver metrics if a
 client requests `/metrics`. We'll also answer /healthz, so you can have k8s poll this url.
 
-Note that you need to make sure that the topic exists in Red Panda / Kafka or that auto creation of topics is enabled.
+Metamorphosis will auto-create Kafka topics.
 
-Note that there are limited guarantees given. During restart, k8s will start a new instance of the daemon before the 
-old one is shut down. During this short period you'll see messages duplicates. Make sure you'll handle these. You can have
-k8s run this is a stateful set if this shouldn't happen.
-
-Also note that the bridge will issue messages in order to test that it can talk to Kafka. These will be given the MQTT
-topic "test" (can be overridden with the environment variable TEST_MESSAGE_TOPIC). Ignore these messages in your consumer.
+Note that there are limited guarantees given. If you run Metamorphosis in a k8s deployment you can potentially see 
+message duplication. If you, on the other hand, run Metamorphosis as a StatefulSet you might lose messages upon restart.
 
 ## Message format
 

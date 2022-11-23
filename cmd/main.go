@@ -37,7 +37,7 @@ func main() {
 		kafkaInterval        int    = 5
 		kafkaBatchSize       int    = 1000
 		kafkaMaxBatchSize    int    = 8000
-		testMessageTopic     string = "test"
+		kafkaTestTopic       string = ""
 	)
 
 	err := godotenv.Load()
@@ -80,8 +80,8 @@ func main() {
 		LookupEnvOrInt("KAFKA_MAX_BATCH_SIZE", kafkaMaxBatchSize), "Kafka MAX batch size (used when un-spooling after failure)")
 	flag.IntVar(&kafkaInterval, "kafka-interval",
 		LookupEnvOrInt("KAFKA_INTERVAL", kafkaInterval), "Kafka interval. How often a write is triggered (seconds)")
-	flag.StringVar(&testMessageTopic, "test-message-topic",
-		LookupEnvOrString("TEST_MESSAGE_TOPIC", testMessageTopic), "Test message topic for test messages when checking Kafka")
+	flag.StringVar(&kafkaTestTopic, "kafka-test-topic",
+		LookupEnvOrString("KAFKA_TEST_TOPIC", kafkaTestTopic), "Initial test message will be sent to this kafka topic. No initial test will be done if this isn't set.")
 	flag.Parse()
 	var logLevel log.LogLevel
 	if logLevelStr != "" {
@@ -116,7 +116,7 @@ func main() {
 		KafkaBatchSize:     kafkaBatchSize,
 		KafkaMaxBatchSize:  kafkaMaxBatchSize,
 		HealthPort:         healthPort,
-		TestMessageTopic:   testMessageTopic,
+		KafkaTestTopic:     kafkaTestTopic,
 		LogLevel:           logLevel,
 	}
 	log.Infof("Startup options: %v", runConfig)

@@ -15,16 +15,16 @@ import (
 func Initialize(p Params) *buffer {
 	brokerAddr := gokafka.TCP(p.Broker + ":" + strconv.FormatInt(int64(p.Port), 10))
 	writer := &gokafka.Writer{
-		Addr:         brokerAddr,
-		Topic:        p.Topic,
-		MaxAttempts:  10,
-		BatchSize:    1,
-		BatchTimeout: time.Millisecond * 20, // Just a really low timeout so the batch is written more or less right away.
-		RequiredAcks: gokafka.RequireAll,
-		Async:        false,
-		Compression:  0,
-		Logger:       nil,
-		ErrorLogger:  log.NewWithPrefix(os.Stdout, os.Stderr, "[kafka-internal]"),
+		Addr:                   brokerAddr,
+		MaxAttempts:            10,
+		BatchSize:              1,
+		BatchTimeout:           time.Millisecond * 20, // Just a really low timeout so the batch is written more or less right away.
+		RequiredAcks:           gokafka.RequireAll,
+		Async:                  false,
+		Compression:            0,
+		Logger:                 nil,
+		ErrorLogger:            log.NewWithPrefix(os.Stdout, os.Stderr, "[kafka-internal]"),
+		AllowAutoTopicCreation: true, // create topics if they don't exist
 	}
 	logger := log.NewWithPrefix(os.Stdout, os.Stderr, "[kafka]")
 	logger.SetLevel(p.LogLevel)
@@ -46,9 +46,15 @@ func Initialize(p Params) *buffer {
 
 // Run starts monitoring the channel and sends messages to the broker.
 func (k *buffer) Run(ctx context.Context) error {
-	err := k.sendTestMessage()
-	if err != nil {
-		return fmt.Errorf("failed to send initial test message: %w", err)
+	// if configured to do so we'll send a test message to the configured topic.
+	if k.testMessageTopic != "" {
+		err := k.sendTestMessage()
+		if err != nil {
+			return fmt.Errorf("failed to send initial test message: %w", err)
+		}
+	}
+	if k.testMessageTopic == "" {
+		k.logger.Warn("No test message topic configured (KAFKA_TEST_TOPIC). Will not send test message so we can't be sure kafka is up and running.")
 	}
 	ticker := time.NewTicker(k.interval)
 	k.logger.Infof("Kafka interface started with write interval %v and batch size %d", k.interval, k.batchSize)
@@ -84,6 +90,7 @@ func (k *buffer) Enqueue(msg Message) {
 	}
 	m := gokafka.Message{
 		Value: msgJson,
+		Topic: k.topic,
 	}
 	k.buffer = append(k.buffer, m)
 	if len(k.buffer) >= k.batchSize {
@@ -194,6 +201,7 @@ func (k *buffer) sendBatched() error {
 func (k *buffer) sendTestMessage() error {
 	ctx, cancel := context.WithTimeout(context.Background(), k.kafkaTimeout)
 	defer cancel()
+	k.logger.Debug("Sending test message")
 	err := k.writer.WriteMessages(ctx, generateTestMessage(k.testMessageTopic))
 	if err != nil {
 		return fmt.Errorf("error sending test message on topic '%s': %w", k.testMessageTopic, err)
@@ -207,7 +215,7 @@ func (k *buffer) updateLastSendAttempt() {
 
 func generateTestMessage(topic string) gokafka.Message {
 	msg := Message{
-		Topic:   topic,
+		Topic:   "test",
 		Content: []byte("Internal test to see if kafka is alive at startup"),
 	}
 	msgJson, err := json.Marshal(msg)
@@ -217,6 +225,7 @@ func generateTestMessage(topic string) gokafka.Message {
 	}
 	testMsg := gokafka.Message{
 		Value: msgJson,
+		Topic: topic,
 	}
 	return testMsg
 }

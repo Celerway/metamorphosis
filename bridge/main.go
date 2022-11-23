@@ -55,7 +55,7 @@ func Run(ctx context.Context, params Params) {
 		Interval:         params.KafkaInterval,
 		BatchSize:        params.KafkaBatchSize,
 		MaxBatchSize:     params.KafkaMaxBatchSize,
-		TestMessageTopic: params.TestMessageTopic,
+		TestMessageTopic: params.KafkaTestTopic,
 		LogLevel:         params.LogLevel,
 	}
 	obsParams := observability.Params{

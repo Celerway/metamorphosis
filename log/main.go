@@ -1,5 +1,7 @@
 // Package log provides logging services. All logging goes through this layer so that we can
 // easily change the logging implementation.
+// The goal here is to be able to redirect logs with levels warn and error to stderr and have the rest
+// go to stdout.
 package log
 
 import (
@@ -20,6 +22,8 @@ const (
 	FatalLevel
 )
 
+const defaultLevel = InfoLevel
+
 func (level LogLevel) String() string {
 	if level < TraceLevel || level > FatalLevel {
 		return "unknown"
@@ -39,8 +43,10 @@ type Logger struct {
 
 const defaultOpts = golog.LstdFlags | golog.Lmsgprefix
 
+// NewLogger creates a new logger. It takes two io.Writers, one for trace,debug,info and one for warn,error,fatal logs.
 func NewLogger(infoOutput, errorOutput io.Writer) *Logger {
 	l := &Logger{
+		logLevel:    defaultLevel,
 		traceLogger: *golog.New(infoOutput, "trace ", defaultOpts),
 		debugLogger: *golog.New(infoOutput, "debug ", defaultOpts),
 		infoLogger:  *golog.New(infoOutput, "info ", defaultOpts),
@@ -50,8 +56,12 @@ func NewLogger(infoOutput, errorOutput io.Writer) *Logger {
 	}
 	return l
 }
+
+// NewWithPrefix creates a new logger. It takes two io.Writers, one for trace,debug,info and one for warn,error,fatal logs.
+// It also takes a prefix which will be added to all log messages.
 func NewWithPrefix(infoOutput, errorOutput io.Writer, prefix string) *Logger {
 	l := &Logger{
+		logLevel:    defaultLevel,
 		traceLogger: *golog.New(infoOutput, prefix+" trace ", defaultOpts),
 		debugLogger: *golog.New(infoOutput, prefix+" debug ", defaultOpts),
 		infoLogger:  *golog.New(infoOutput, prefix+" info ", defaultOpts),
@@ -188,32 +198,28 @@ func (l *Logger) Fatal(v ...interface{}) {
 	l.fatalLogger.Fatal(v...)
 }
 
-func (l *Logger) SetLevelFromString(level string) error {
+// Parse the level string and return the corresponding LogLevel, if it doesn't recognize the level, return a string
+func ParseLogLevel(level string) (LogLevel, error) {
 	switch level {
-	case "": // Default choice.
-		l.SetLevel(InfoLevel)
 	case "trace":
-		l.SetLevel(TraceLevel)
+		return TraceLevel, nil
 	case "debug":
-		l.SetLevel(DebugLevel)
+		return DebugLevel, nil
 	case "info":
-		l.SetLevel(InfoLevel)
+		return InfoLevel, nil
 	case "warn":
-		l.SetLevel(WarnLevel)
+		return WarnLevel, nil
 	case "error":
-		l.SetLevel(ErrorLevel)
+		return ErrorLevel, nil
+	case "fatal":
+		return FatalLevel, nil
 	default:
-		return fmt.Errorf("unknown loglevel: %s", level)
+		return 0, fmt.Errorf("unknown log level: '%s'", level)
 	}
-	return nil
 }
 
 func (l *Logger) SetLevel(level LogLevel) {
 	l.logLevel = level
-}
-
-func SetLevelFromString(level string) error {
-	return defaultLogger.SetLevelFromString(level)
 }
 
 func SetLevel(level LogLevel) {

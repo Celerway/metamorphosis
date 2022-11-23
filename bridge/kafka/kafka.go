@@ -24,8 +24,10 @@ func Initialize(p Params) *buffer {
 		Async:        false,
 		Compression:  0,
 		Logger:       nil,
-		ErrorLogger:  log.NewWithPrefix(os.Stdout, os.Stderr, "kafka-internal"),
+		ErrorLogger:  log.NewWithPrefix(os.Stdout, os.Stderr, "[kafka-internal]"),
 	}
+	logger := log.NewWithPrefix(os.Stdout, os.Stderr, "[kafka]")
+	logger.SetLevel(p.LogLevel)
 	return &buffer{
 		batchSize:            p.BatchSize,
 		interval:             p.Interval,
@@ -36,7 +38,7 @@ func Initialize(p Params) *buffer {
 		writer:               writer,
 		maxBatchSize:         p.MaxBatchSize,
 		kafkaTimeout:         time.Second * 10, // 10s timeout when takling to kafka.,
-		logger:               log.NewWithPrefix(os.Stdout, os.Stderr, "kafka"),
+		logger:               logger,
 		obsChannel:           p.ObsChannel,
 		testMessageTopic:     p.TestMessageTopic,
 	}

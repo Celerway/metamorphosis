@@ -29,7 +29,7 @@ func Run(ctx context.Context, params Params) {
 	br := bridge{
 		mqttCh:  make(mqtt.MessageChannel, channelSize),
 		kafkaCh: make(kafka.MessageChan, channelSize),
-		logger:  log.NewWithPrefix(os.Stdout, os.Stderr, "bridge"),
+		logger:  log.NewWithPrefix(os.Stdout, os.Stderr, "[bridge]"),
 	}
 	if params.MqttTls {
 		tlsConfig = NewTlsConfig(params.TlsRootCrtFile, params.MqttClientCertFile, params.MqttClientKeyFile, br.logger)
@@ -43,6 +43,7 @@ func Run(ctx context.Context, params Params) {
 		Clientid:   params.MqttClientId,
 		Channel:    br.mqttCh,
 		ObsChannel: obsChan,
+		LogLevel:   params.LogLevel,
 	}
 	kafkaParams := kafka.Params{
 		Broker:           params.KafkaBroker,
@@ -55,10 +56,12 @@ func Run(ctx context.Context, params Params) {
 		BatchSize:        params.KafkaBatchSize,
 		MaxBatchSize:     params.KafkaMaxBatchSize,
 		TestMessageTopic: params.TestMessageTopic,
+		LogLevel:         params.LogLevel,
 	}
 	obsParams := observability.Params{
 		Channel:    obsChan,
 		HealthPort: params.HealthPort,
+		LogLevel:   params.LogLevel,
 	}
 	// Start the goroutines that do the work.
 	obs := observability.Initialize(obsParams) // Fire up obs.

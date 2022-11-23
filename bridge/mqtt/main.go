@@ -11,6 +11,8 @@ import (
 )
 
 func Run(ctx context.Context, params Params) {
+	logger := log.NewWithPrefix(os.Stdout, os.Stderr, "[mqtt]")
+	logger.SetLevel(params.LogLevel)
 	client := client{
 		broker:     params.Broker,
 		port:       params.Port,
@@ -19,7 +21,7 @@ func Run(ctx context.Context, params Params) {
 		tls:        params.Tls,
 		ch:         params.Channel,
 		obsChannel: params.ObsChannel,
-		logger:     log.NewWithPrefix(os.Stdout, os.Stderr, "mqtt"),
+		logger:     logger,
 	}
 	client.logger.Debugf("Starting MQTT Worker.")
 	client.logger.Debugf("Broker: %s:%d (tls: %v)", params.Broker, params.Port, params.Tls)

@@ -23,6 +23,7 @@ func (d StatusMessage) String() string {
 type Params struct {
 	Channel    Channel
 	HealthPort int
+	LogLevel   log.LogLevel
 }
 
 type observability struct {

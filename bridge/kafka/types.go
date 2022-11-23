@@ -43,4 +43,5 @@ type Params struct {
 	ObsChannel       observability.Channel
 	RetryInterval    time.Duration
 	TestMessageTopic string
+	LogLevel         log.LogLevel
 }

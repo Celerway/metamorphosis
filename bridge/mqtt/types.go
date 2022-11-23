@@ -16,6 +16,7 @@ type Params struct {
 	Channel    MessageChannel
 	Topic      string
 	ObsChannel observability.Channel
+	LogLevel   log.LogLevel
 }
 
 type ChannelMessage struct {

@@ -20,7 +20,7 @@ var embeddedVersion string
 
 func main() {
 	var ( // default settings:
-		logLevel             string
+		logLevelStr          string
 		mqttBroker           string
 		mqttPort             int = 8883
 		mqttTopic            string
@@ -46,8 +46,8 @@ func main() {
 		log.Infof("Error loading .env file, assuming production: %s", err.Error())
 	}
 
-	flag.StringVar(&logLevel, "log-level",
-		LookupEnvOrString("LOG_LEVEL", logLevel), "Log level (trace|debug|info|warn|error")
+	flag.StringVar(&logLevelStr, "log-level",
+		LookupEnvOrString("LOG_LEVEL", logLevelStr), "Log level (trace|debug|info|warn|error")
 	flag.StringVar(&caRootCertFile, "root-ca",
 		LookupEnvOrString("ROOT_CA", caRootCertFile), "Path to root CA certificate (pubkey)")
 	flag.StringVar(&mqttCaClientCertFile, "mqtt-client-cert",
@@ -83,8 +83,15 @@ func main() {
 	flag.StringVar(&testMessageTopic, "test-message-topic",
 		LookupEnvOrString("TEST_MESSAGE_TOPIC", testMessageTopic), "Test message topic for test messages when checking Kafka")
 	flag.Parse()
-
-	setLoglevel(logLevel)
+	var logLevel log.LogLevel
+	if logLevelStr != "" {
+		logLevel, err = log.ParseLogLevel(logLevelStr)
+		if err != nil {
+			log.Fatalf("Invalid log level: %s", logLevelStr)
+		}
+		log.Infof("Setting log level to %s", logLevel.String())
+		log.SetLevel(logLevel)
+	}
 
 	if mqttTls {
 		CheckSet(caRootCertFile, "ROOT_CA", "tls is enabled")
@@ -110,6 +117,7 @@ func main() {
 		KafkaMaxBatchSize:  kafkaMaxBatchSize,
 		HealthPort:         healthPort,
 		TestMessageTopic:   testMessageTopic,
+		LogLevel:           logLevel,
 	}
 	log.Infof("Startup options: %v", runConfig)
 	log.Debug("Starting bridge")
@@ -154,25 +162,4 @@ func LookupEnvOrBool(key string, defaultVal bool) bool {
 		return strings.ToUpper(val) == "TRUE"
 	}
 	return defaultVal
-}
-
-func setLoglevel(level string) {
-	switch level {
-	case "": // Default choice.
-		log.SetLevel(log.InfoLevel)
-	case "trace":
-		log.SetLevel(log.TraceLevel)
-	case "debug":
-		log.SetLevel(log.DebugLevel)
-	case "info":
-		log.SetLevel(log.InfoLevel)
-	case "warn":
-		log.SetLevel(log.WarnLevel)
-	case "error":
-		log.SetLevel(log.ErrorLevel)
-	default:
-		log.Errorf("Unknown loglevel: %s", level)
-		os.Exit(1)
-	}
-	log.Debugf("Log level set to %s", level)
 }

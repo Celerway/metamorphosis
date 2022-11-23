@@ -40,10 +40,12 @@ func (obs observability) Run(ctx context.Context) {
 }
 
 func Initialize(params Params) *observability {
+	logger := log.NewWithPrefix(os.Stdout, os.Stderr, "[observability]")
+	logger.SetLevel(params.LogLevel)
 	reg := prometheus.NewRegistry()
 	obs := observability{
 		channel:    params.Channel,
-		logger:     log.NewWithPrefix(os.Stdout, os.Stderr, "observability"),
+		logger:     logger,
 		healthPort: params.HealthPort,
 		promReg:    reg,
 	}

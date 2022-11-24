@@ -53,7 +53,7 @@ func Test_observability_Run(t *testing.T) {
 	is.NoErr(err)
 	is.Equal(metrics["kafka_state"], float64(0))
 	is.Equal(metrics["kafka_sent"], float64(1))
-	ch <- MattReceived
+	ch <- MqttReceived
 	metrics, err = getMetrics(obsPort)
 	is.NoErr(err)
 	is.Equal(metrics["mqtt_received"], float64(1))

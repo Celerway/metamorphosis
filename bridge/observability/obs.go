@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-func (obs observability) Run(ctx context.Context) {
+func (obs Observability) Run(ctx context.Context) {
 	obs.logger.Debug("Observability worker is running")
 	wg := sync.WaitGroup{}
 	wg.Add(1)
@@ -39,11 +39,11 @@ func (obs observability) Run(ctx context.Context) {
 	log.Info("Observability worker is done")
 }
 
-func Initialize(params Params) *observability {
+func Initialize(params Params) *Observability {
 	logger := log.NewWithPrefix(os.Stdout, os.Stderr, "[observability]")
 	logger.SetLevel(params.LogLevel)
 	reg := prometheus.NewRegistry()
-	obs := observability{
+	obs := Observability{
 		channel:    params.Channel,
 		logger:     logger,
 		healthPort: params.HealthPort,
@@ -75,7 +75,7 @@ func Initialize(params Params) *observability {
 
 // runHttpServer starts the http server that serves the healthz and metrics endpoints.
 // It blocks until the context is cancelled.
-func (obs *observability) runHttpServer(ctx context.Context) {
+func (obs *Observability) runHttpServer(ctx context.Context) {
 	// We don't care about waitGroups and stuff here. We can be aborted at any time.
 	// router := mux.NewRouter().StrictSlash(true)
 
@@ -104,7 +104,7 @@ func (obs *observability) runHttpServer(ctx context.Context) {
 	wg.Wait()
 }
 
-func (obs *observability) Cleanup() {
+func (obs *Observability) Cleanup() {
 	obs.logger.Info("De-registering prometheus counters")
 	obs.promReg.Unregister(obs.mqttReceived) // During testing we run multiple bridges in the same binary.
 	obs.promReg.Unregister(obs.mqttErrors)   // So we must make sure that these don't collide.
@@ -113,11 +113,11 @@ func (obs *observability) Cleanup() {
 
 }
 
-func (obs observability) handleChannelMessage(msg StatusMessage) {
+func (obs Observability) handleChannelMessage(msg StatusMessage) {
 	obs.logger.Tracef("Observability received %s", msg)
 
 	switch msg {
-	case MattReceived:
+	case MqttReceived:
 		obs.mqttReceived.Inc()
 	case MqttError:
 		obs.mqttErrors.Inc()
@@ -136,7 +136,7 @@ func GetChannel(size int) Channel {
 	return make(Channel, size) //
 }
 
-func (obs *observability) HealthzHandler(w http.ResponseWriter, _ *http.Request) {
+func (obs *Observability) HealthzHandler(w http.ResponseWriter, _ *http.Request) {
 	if obs.ready {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
@@ -146,6 +146,6 @@ func (obs *observability) HealthzHandler(w http.ResponseWriter, _ *http.Request)
 	}
 }
 
-func (obs *observability) Ready() {
+func (obs *Observability) Ready() {
 	obs.ready = true
 }

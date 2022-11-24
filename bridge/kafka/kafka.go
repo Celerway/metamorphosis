@@ -41,6 +41,7 @@ func Initialize(p Params) *buffer {
 		logger:               logger,
 		obsChannel:           p.ObsChannel,
 		testMessageTopic:     p.TestMessageTopic,
+		topic:                p.Topic,
 	}
 }
 

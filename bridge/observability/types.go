@@ -10,14 +10,14 @@ type Channel chan StatusMessage
 type StatusMessage int
 
 const (
-	MattReceived StatusMessage = iota
+	MqttReceived StatusMessage = iota
 	MqttError
 	KafkaSent
 	KafkaError
 )
 
 func (d StatusMessage) String() string {
-	return [...]string{"MattReceived", "MqttError", "KafkaSent", "KafkaError"}[d]
+	return [...]string{"MqttReceived", "MqttError", "KafkaSent", "KafkaError"}[d]
 }
 
 type Params struct {
@@ -26,7 +26,7 @@ type Params struct {
 	LogLevel   log.LogLevel
 }
 
-type observability struct {
+type Observability struct {
 	channel      Channel
 	mqttReceived prometheus.Counter
 	mqttErrors   prometheus.Counter

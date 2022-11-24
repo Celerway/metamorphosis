@@ -136,5 +136,5 @@ func (client *client) messageHandler(_ paho.Client, msg paho.Message) {
 		Content: msg.Payload(),
 	}
 	client.ch <- chMsg
-	client.obsChannel <- observability.MattReceived
+	client.obsChannel <- observability.MqttReceived
 }

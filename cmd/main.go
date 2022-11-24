@@ -103,7 +103,17 @@ func main() {
 		hostname = strings.Split(hostname, ".")[0]
 		mqttClientId = hostname
 	}
-
+	// Check if the client_id contains %h, if so, replace it with the hostname
+	if strings.Contains(mqttClientId, "%h") {
+		hostname, err := os.Hostname()
+		if err != nil {
+			log.Fatalf("Error getting hostname: %s", err.Error())
+		}
+		// chop off the domain name
+		hostname = strings.Split(hostname, ".")[0]
+		mqttClientId = strings.Replace(mqttClientId, "%h", hostname, -1)
+	}
+	log.Infof("MQTT client id set to %s", mqttClientId)
 	if mqttTls {
 		CheckSet(caRootCertFile, "ROOT_CA", "tls is enabled")
 		CheckSet(mqttCaClientCertFile, "MQTT_CLIENT_CERT", "tls is enabled")

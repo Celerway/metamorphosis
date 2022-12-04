@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.3.0](https://github.com/Celerway/metamorphosis/compare/v0.2.6...v0.3.0) (2022-12-04)
+
+
+### Bug Fixes
+
+* if the MQTT_CLIENT_ID isn't set, use hostname (without domain). ([68d673f](https://github.com/Celerway/metamorphosis/commit/68d673fbfbe7195bfe06103dccd8e207ddda51e9))
+* refactor observability layer to be idiomatic Go and add tests for it. ([275785a](https://github.com/Celerway/metamorphosis/commit/275785aa7dcacbad119e19fa1faea77d5eb624f4))
+* typo. matt->mqtt. ([bf4e84c](https://github.com/Celerway/metamorphosis/commit/bf4e84c1d02810bacbbc078de75a727245026ace))
+
 ### [0.2.6](https://github.com/Celerway/metamorphosis/compare/v0.2.5...v0.2.6) (2022-09-06)
 
 

@@ -5,8 +5,8 @@ import (
 	_ "embed"
 	"flag"
 	"github.com/celerway/metamorphosis/bridge"
+	"github.com/celerway/metamorphosis/log"
 	"github.com/joho/godotenv"
-	log "github.com/sirupsen/logrus"
 	"os"
 	"os/signal"
 	"strconv"
@@ -20,12 +20,12 @@ var embeddedVersion string
 
 func main() {
 	var ( // default settings:
-		logLevel             string
+		logLevelStr          string
 		mqttBroker           string
 		mqttPort             int = 8883
 		mqttTopic            string
-		mqttTls              bool   = true
-		mqttClientId         string = "metamorphosis"
+		mqttTls              bool = true
+		mqttClientId         string
 		caRootCertFile       string
 		mqttCaClientCertFile string
 		mqttCaClientKeyFile  string
@@ -37,7 +37,7 @@ func main() {
 		kafkaInterval        int    = 5
 		kafkaBatchSize       int    = 1000
 		kafkaMaxBatchSize    int    = 8000
-		testMessageTopic     string = "test"
+		kafkaTestTopic       string = ""
 	)
 
 	err := godotenv.Load()
@@ -46,8 +46,8 @@ func main() {
 		log.Infof("Error loading .env file, assuming production: %s", err.Error())
 	}
 
-	flag.StringVar(&logLevel, "log-level",
-		LookupEnvOrString("LOG_LEVEL", logLevel), "Log level (trace|debug|info|warn|error")
+	flag.StringVar(&logLevelStr, "log-level",
+		LookupEnvOrString("LOG_LEVEL", logLevelStr), "Log level (trace|debug|info|warn|error")
 	flag.StringVar(&caRootCertFile, "root-ca",
 		LookupEnvOrString("ROOT_CA", caRootCertFile), "Path to root CA certificate (pubkey)")
 	flag.StringVar(&mqttCaClientCertFile, "mqtt-client-cert",
@@ -80,12 +80,40 @@ func main() {
 		LookupEnvOrInt("KAFKA_MAX_BATCH_SIZE", kafkaMaxBatchSize), "Kafka MAX batch size (used when un-spooling after failure)")
 	flag.IntVar(&kafkaInterval, "kafka-interval",
 		LookupEnvOrInt("KAFKA_INTERVAL", kafkaInterval), "Kafka interval. How often a write is triggered (seconds)")
-	flag.StringVar(&testMessageTopic, "test-message-topic",
-		LookupEnvOrString("TEST_MESSAGE_TOPIC", testMessageTopic), "Test message topic for test messages when checking Kafka")
+	flag.StringVar(&kafkaTestTopic, "kafka-test-topic",
+		LookupEnvOrString("KAFKA_TEST_TOPIC", kafkaTestTopic), "Initial test message will be sent to this kafka topic. No initial test will be done if this isn't set.")
 	flag.Parse()
+	var logLevel log.LogLevel
+	if logLevelStr != "" {
+		logLevel, err = log.ParseLogLevel(logLevelStr)
+		if err != nil {
+			log.Fatalf("Invalid log level: %s", logLevelStr)
+		}
+		log.Infof("Setting log level to %s", logLevel.String())
+		log.SetLevel(logLevel)
+	}
 
-	setLoglevel(logLevel)
-
+	// check if MQTT client id is set, if not, use hostname as the ID
+	if mqttClientId == "" {
+		hostname, err := os.Hostname()
+		if err != nil {
+			log.Fatalf("Error getting hostname: %s", err.Error())
+		}
+		// chop off the domain name
+		hostname = strings.Split(hostname, ".")[0]
+		mqttClientId = hostname
+	}
+	// Check if the client_id contains %h, if so, replace it with the hostname
+	if strings.Contains(mqttClientId, "%h") {
+		hostname, err := os.Hostname()
+		if err != nil {
+			log.Fatalf("Error getting hostname: %s", err.Error())
+		}
+		// chop off the domain name
+		hostname = strings.Split(hostname, ".")[0]
+		mqttClientId = strings.Replace(mqttClientId, "%h", hostname, -1)
+	}
+	log.Infof("MQTT client id set to %s", mqttClientId)
 	if mqttTls {
 		CheckSet(caRootCertFile, "ROOT_CA", "tls is enabled")
 		CheckSet(mqttCaClientCertFile, "MQTT_CLIENT_CERT", "tls is enabled")
@@ -109,7 +137,8 @@ func main() {
 		KafkaBatchSize:     kafkaBatchSize,
 		KafkaMaxBatchSize:  kafkaMaxBatchSize,
 		HealthPort:         healthPort,
-		TestMessageTopic:   testMessageTopic,
+		KafkaTestTopic:     kafkaTestTopic,
+		LogLevel:           logLevel,
 	}
 	log.Infof("Startup options: %v", runConfig)
 	log.Debug("Starting bridge")
@@ -154,25 +183,4 @@ func LookupEnvOrBool(key string, defaultVal bool) bool {
 		return strings.ToUpper(val) == "TRUE"
 	}
 	return defaultVal
-}
-
-func setLoglevel(level string) {
-	switch level {
-	case "": // Default choice.
-		log.SetLevel(log.InfoLevel)
-	case "trace":
-		log.SetLevel(log.TraceLevel)
-	case "debug":
-		log.SetLevel(log.DebugLevel)
-	case "info":
-		log.SetLevel(log.InfoLevel)
-	case "warn":
-		log.SetLevel(log.WarnLevel)
-	case "error":
-		log.SetLevel(log.ErrorLevel)
-	default:
-		log.Errorf("Unknown loglevel: %s", level)
-		os.Exit(1)
-	}
-	log.Debugf("Log level set to %s", level)
 }

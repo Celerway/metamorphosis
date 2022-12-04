@@ -2,26 +2,29 @@
 
 A simple MQTT -> Kafka bridge and concentrator. Note that we'll use 
 [Red Panda](https://github.com/vectorizedio/redpanda) instead of Kafka. It is simpler (no zookeeper) 
-and faster (no JVM), and claims protocol compatibility with Kafka. You should consider it.
+and faster (no JVM), and claims protocol compatibility with Kafka. You should consider it. Note that Metamorphosis 
+uses packages written for Kafka, so it is likely to work just as well with Kafka.
 
 This is a protocol bridge between MQTT and Kafka. It'll connect to a broker, using HOSTNAME as the client ID, 
-subscription and listen for messages. When a message is received, we'll give it to kafka. It is meant to
-be running in a k8s pod.
+subscription and listen for messages. When a message is received it is placed in a buffer and written to Kafka 
+either based on message volume or given an interval. 
 
-If Kafka is unavailable we'll try to spool the messages to memory, so they can be recovered. If we can't write 
-to Kafka, we'll retry every 10 seconds. Once we reconnect, we dump all the messages we have.
+Upon startup it can, if configured to do so, issue a message to Kafka. This can be very useful as any misconfiguration 
+will then be immediately detected. If this initial message can't be sent Metamorphosis will exit with an error.
 
-Once Kafka and MQTT are connected, Metamorphosis will listen on `HEALTH_PORT` (cleartext http) and deliver metrics if a
+When up and running Metamorphosis will listen for messages on the configured MQTT topic and write them to Kafka. Note 
+that what we get from MQTT is binary data so the messages written to Kafka will be base64 encoded. 
+
+If Kafka becomes unavailable we'll try to spool the messages to memory, so they can be recovered. It will retry every 10 
+seconds. Once we reconnect, it'll dump all the messages we have buffered.
+
+Metamorphosis will listen on `HEALTH_PORT` (cleartext http) and deliver metrics if a
 client requests `/metrics`. We'll also answer /healthz, so you can have k8s poll this url.
 
-Note that you need to make sure that the topic exists in Red Panda / Kafka or that auto creation of topics is enabled.
+Metamorphosis will auto-create Kafka topics.
 
-Note that there are limited guarantees given. During restart, k8s will start a new instance of the daemon before the 
-old one is shut down. During this short period you'll see messages duplicates. Make sure you'll handle these. You can have
-k8s run this is a stateful set if this shouldn't happen.
-
-Also note that the bridge will issue messages in order to test that it can talk to Kafka. These will be given the MQTT
-topic "test" (can be overridden with the environment variable TEST_MESSAGE_TOPIC). Ignore these messages in your consumer.
+Note that there are limited guarantees given. If you run Metamorphosis in a k8s deployment you can potentially see 
+message duplication. If you, on the other hand, run Metamorphosis as a StatefulSet you might lose messages upon restart.
 
 ## Message format
 
@@ -39,8 +42,8 @@ don't really know what is inside the actual message we get from MQTT, so the con
 
 ## Development
 
-You'll need an .env file to run this locally or command line options. I recommend having a ssh port forward
-to a Kafka server.
+You'll need an .env file to run this locally or use command line options. Personally I've been running with Red Panda
+in a container and a local Mosquitto broker or an EMQX broker in a container.
 
 Suggested `.env` file:
 ```
@@ -59,13 +62,15 @@ KAFKA_TOPIC="mqtt"
 
 I use [standard-version](https://www.npmjs.com/package/standard-version) to maintain the changelog and tags.
 
-## Design
+## Design and source code organization
 
-Three main packages
+Packages
 
-* bridge glues together mqtt and kafka. If we ever want to do transformations, it happens here.
-* mqtt contains the mqtt stuff
-* kafka for the kafka stuff. this is the only one containing any meaningful logic.
+* [bridge](bridge) glues together mqtt and kafka. If we ever want to do transformations, it happens here.
+* [mqtt](bridge/mqtt) contains the mqtt stuff. It is a thin wrapper around the mqtt client.
+* [kafka](bridge/kafka) for the kafka stuff. this is the only one containing any meaningful logic.
+* [log](log) is a wrapper around standard library logger. It will divert trace, debug and info to stdout and warn, error and fatal to stderr.
+* [cmd](cmd) contains the main package. It is responsible for parsing the command line or environment and setting up the bridge.
 
 In addition, there is an observability package which deals with prometheus stuff and responds to k8s health checks.
 
@@ -73,14 +78,15 @@ In addition, there is an observability package which deals with prometheus stuff
 
  * [go-kafka](https://github.com/segmentio/kafka-go), a nice native Go Kafka client.
  * [paho.mqtt.golang](https://github.com/eclipse/paho.mqtt.golang), MQTT client. Doesn't support MQTT 5.
- * [logrus](https://github.com/sirupsen/logrus), our preferred logger
+
+In addition, the following is used by the tests:
+ * [toxy proxy](https://github.com/Shopify/toxiproxy) to simulate network issues.
+ * Mosquitto (in the Docker image) to act as a MQTT broker
 
 ## Performance
 
-For us the most important thing is reliability. So we do synchronous writes which block the writer. 
-This is pretty slow, but we're sure not to lose any messages. If you need more performance you can increase the
-batch size.
-
+If you need more performance you can increase the batch size. Making round trips to Kafka seems expensive. If you need
+more performance you might wanna think about partitioning. This is not supported at the moment.
 
 ### Todo: Tls against Kafka
 

@@ -6,8 +6,8 @@ import (
 	"fmt"
 	toxiproxy "github.com/Shopify/toxiproxy/v2/client"
 	"github.com/celerway/metamorphosis/bridge/observability"
+	"github.com/celerway/metamorphosis/log"
 	is2 "github.com/matryer/is"
-	log "github.com/sirupsen/logrus"
 	"os"
 	"os/exec"
 	"sync"
@@ -19,7 +19,6 @@ var toxiClient *toxiproxy.Client
 
 func TestMain(m *testing.M) {
 	log.SetLevel(log.InfoLevel)
-	log.SetFormatter(&log.TextFormatter{})
 	// Setup test environment, mosquitto server
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

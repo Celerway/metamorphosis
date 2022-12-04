@@ -3,7 +3,7 @@ package bridge
 import (
 	"github.com/celerway/metamorphosis/bridge/kafka"
 	"github.com/celerway/metamorphosis/bridge/mqtt"
-	log "github.com/sirupsen/logrus"
+	"github.com/celerway/metamorphosis/log"
 	"time"
 )
 
@@ -25,11 +25,12 @@ type Params struct {
 	KafkaBatchSize     int
 	KafkaMaxBatchSize  int
 	KafkaInterval      time.Duration
-	TestMessageTopic   string
+	KafkaTestTopic     string
+	LogLevel           log.LogLevel
 }
 
 type bridge struct {
 	mqttCh  mqtt.MessageChannel
 	kafkaCh kafka.MessageChan
-	logger  *log.Entry
+	logger  *log.Logger
 }

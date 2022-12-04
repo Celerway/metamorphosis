@@ -4,13 +4,15 @@ import (
 	"context"
 	"fmt"
 	"github.com/celerway/metamorphosis/bridge/observability"
+	"github.com/celerway/metamorphosis/log"
 	paho "github.com/eclipse/paho.mqtt.golang"
-	log "github.com/sirupsen/logrus"
 	"os"
 	"time"
 )
 
 func Run(ctx context.Context, params Params) {
+	logger := log.NewWithPrefix(os.Stdout, os.Stderr, "[mqtt]")
+	logger.SetLevel(params.LogLevel)
 	client := client{
 		broker:     params.Broker,
 		port:       params.Port,
@@ -19,7 +21,7 @@ func Run(ctx context.Context, params Params) {
 		tls:        params.Tls,
 		ch:         params.Channel,
 		obsChannel: params.ObsChannel,
-		logger:     log.WithFields(log.Fields{"module": "mqtt"}),
+		logger:     logger,
 	}
 	client.logger.Debugf("Starting MQTT Worker.")
 	client.logger.Debugf("Broker: %s:%d (tls: %v)", params.Broker, params.Port, params.Tls)
@@ -134,5 +136,5 @@ func (client *client) messageHandler(_ paho.Client, msg paho.Message) {
 		Content: msg.Payload(),
 	}
 	client.ch <- chMsg
-	client.obsChannel <- observability.MattReceived
+	client.obsChannel <- observability.MqttReceived
 }

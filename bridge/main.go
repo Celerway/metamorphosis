@@ -8,8 +8,8 @@ import (
 	"github.com/celerway/metamorphosis/bridge/kafka"
 	"github.com/celerway/metamorphosis/bridge/mqtt"
 	"github.com/celerway/metamorphosis/bridge/observability"
-	log "github.com/sirupsen/logrus"
-	"io/ioutil"
+	"github.com/celerway/metamorphosis/log"
+	"os"
 	"sync"
 	"time"
 )
@@ -29,7 +29,7 @@ func Run(ctx context.Context, params Params) {
 	br := bridge{
 		mqttCh:  make(mqtt.MessageChannel, channelSize),
 		kafkaCh: make(kafka.MessageChan, channelSize),
-		logger:  log.WithFields(log.Fields{"module": "bridge"}),
+		logger:  log.NewWithPrefix(os.Stdout, os.Stderr, "[bridge]"),
 	}
 	if params.MqttTls {
 		tlsConfig = NewTlsConfig(params.TlsRootCrtFile, params.MqttClientCertFile, params.MqttClientKeyFile, br.logger)
@@ -43,6 +43,7 @@ func Run(ctx context.Context, params Params) {
 		Clientid:   params.MqttClientId,
 		Channel:    br.mqttCh,
 		ObsChannel: obsChan,
+		LogLevel:   params.LogLevel,
 	}
 	kafkaParams := kafka.Params{
 		Broker:           params.KafkaBroker,
@@ -54,11 +55,13 @@ func Run(ctx context.Context, params Params) {
 		Interval:         params.KafkaInterval,
 		BatchSize:        params.KafkaBatchSize,
 		MaxBatchSize:     params.KafkaMaxBatchSize,
-		TestMessageTopic: params.TestMessageTopic,
+		TestMessageTopic: params.KafkaTestTopic,
+		LogLevel:         params.LogLevel,
 	}
 	obsParams := observability.Params{
 		Channel:    obsChan,
 		HealthPort: params.HealthPort,
+		LogLevel:   params.LogLevel,
 	}
 	// Start the goroutines that do the work.
 	obs := observability.Initialize(obsParams) // Fire up obs.
@@ -106,11 +109,11 @@ func Run(ctx context.Context, params Params) {
 	br.logger.Warn("Bridge exiting")
 }
 
-func NewTlsConfig(caFile, clientCertFile, clientKeyFile string, logger *log.Entry) *tls.Config {
+func NewTlsConfig(caFile, clientCertFile, clientKeyFile string, logger *log.Logger) *tls.Config {
 	certPool := x509.NewCertPool()
-	ca, err := ioutil.ReadFile(caFile)
+	ca, err := os.ReadFile(caFile)
 	if err != nil {
-		log.Fatalln(err.Error())
+		log.Fatal(err.Error())
 	}
 	certPool.AppendCertsFromPEM(ca)
 	// Import client certificate/key pair

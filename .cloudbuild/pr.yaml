@@ -1,5 +1,8 @@
+substitutions:
+  _BRANCH_NAME: ${BRANCH_NAME//\//-}
+
 steps:
   - name: 'gcr.io/cloud-builders/docker'
-    args: [ 'build', '--tag=eu.gcr.io/${_TARGET_PROJECT_ID}/${REPO_NAME}:${BRANCH_NAME}-${SHORT_SHA}', '.' ]
+    args: [ 'build', '--tag=eu.gcr.io/${_TARGET_PROJECT_ID}/${REPO_NAME}:${_BRANCH_NAME}-${SHORT_SHA}', '.' ]
 
-images: ['eu.gcr.io/${_TARGET_PROJECT_ID}/${REPO_NAME}:${BRANCH_NAME}-${SHORT_SHA}']
+images: ['eu.gcr.io/${_TARGET_PROJECT_ID}/${REPO_NAME}:${_BRANCH_NAME}-${SHORT_SHA}']

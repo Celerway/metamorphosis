@@ -1,5 +1,5 @@
 substitutions:
-￼  _BRANCH_NAME: ${BRANCH_NAME//\//-}
+  _BRANCH_NAME: ${BRANCH_NAME//\//-}
 
 steps:
   - name: 'gcr.io/cloud-builders/docker'

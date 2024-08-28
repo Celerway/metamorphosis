@@ -1,6 +1,6 @@
 steps:
 
   - name: 'gcr.io/cloud-builders/docker'
-    args: [ 'build', '--tag=eu.gcr.io/${_TARGET_PROJECT_ID}/${REPO_NAME}:${TAG_NAME}', '.' ]
+    args: [ 'build', '--tag=${_ARTIFACT_REGISTRY_DOMAIN}/${_TARGET_PROJECT_ID}/${_NIMBUS_DOCKER_ARTIFACTS}/${REPO_NAME}:${TAG_NAME}', '.' ]
 
-images: ['eu.gcr.io/${_TARGET_PROJECT_ID}/${REPO_NAME}:${TAG_NAME}']
+images: ['${_ARTIFACT_REGISTRY_DOMAIN}/${_TARGET_PROJECT_ID}/${_NIMBUS_DOCKER_ARTIFACTS}/${REPO_NAME}:${TAG_NAME}']

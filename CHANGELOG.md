@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.3.2](https://github.com/Celerway/metamorphosis/compare/v0.3.1...v0.3.2) (2024-09-02)
+
+
+### Features
+
+* Moving build to point to Artifact registry. ([0dc83e1](https://github.com/Celerway/metamorphosis/commit/0dc83e1e925dcbd35c4e4203a6d7e5d187b0377b))
+
 ### [0.3.1](https://github.com/Celerway/metamorphosis/compare/v0.3.0...v0.3.1) (2023-09-12)
 
 ## [0.3.0](https://github.com/Celerway/metamorphosis/compare/v0.2.6...v0.3.0) (2022-12-04)
